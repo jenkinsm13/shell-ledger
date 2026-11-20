@@ -23,6 +23,8 @@ The first run downloads Form 4 history back to 2006 and looks up each issuer's i
 
 Run it once a week, between Friday night and Sunday night New York time. A forecast that is not written before Monday is skipped for good.
 
+Inside the Claude desktop workspace, where commands are limited to three minutes and the folder does not allow deletes, use `bash scripts/vm_weekly.sh` instead and repeat it until it prints DONE.
+
 Single steps: `uv run shell-ledger status | ingest | issue | score | historical | event | report | check`.
 
 ## Where things are

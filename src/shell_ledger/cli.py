@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from datetime import date, datetime, timezone
 
 from . import config, db, event, ingest, ledger, report, secweb
@@ -113,7 +114,12 @@ def cmd_report(a):
 def cmd_weekly(a):
     """Ingest, score what has settled, write next week's forecast, event test, report."""
     root, fz, conn = _open()
+    t0 = time.monotonic()
     code = cmd_ingest(a)
+    if not code and a.max_seconds < 1000 and time.monotonic() - t0 > 30:
+        # Time-limited runners: do the scoring and forecasting in a fresh call.
+        print("WEEKLY: ingest caught up; run again to score and forecast.")
+        return 3
     waiting = conn.execute(
         "SELECT COUNT(DISTINCT issuer_cik) FROM trades WHERE issuer_cik NOT IN (SELECT cik FROM issuers)"
     ).fetchone()[0]
