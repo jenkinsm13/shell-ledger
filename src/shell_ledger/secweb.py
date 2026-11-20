@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import gzip
 import os
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -13,7 +14,16 @@ class SecError(RuntimeError):
 
 
 _last = [0.0]
-MIN_INTERVAL = 0.14  # about 7 requests a second; the SEC's ceiling is 10
+_lock = threading.Lock()
+MIN_INTERVAL = 0.125  # 8 request starts a second across all threads; the SEC's ceiling is 10
+
+
+def _pace() -> None:
+    with _lock:
+        wait = _last[0] + MIN_INTERVAL - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        _last[0] = time.monotonic()
 
 
 def user_agent() -> str:
@@ -30,10 +40,7 @@ def get(url: str, retries: int = 4, timeout: int = 90):
     """Fetch a URL. Returns bytes, or None for 404. Raises SecError on refusal."""
     ua = user_agent()
     for attempt in range(retries):
-        wait = _last[0] + MIN_INTERVAL - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        _last[0] = time.monotonic()
+        _pace()
         req = urllib.request.Request(url, headers={"User-Agent": ua, "Accept-Encoding": "gzip, deflate"})
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:

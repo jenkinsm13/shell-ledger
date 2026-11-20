@@ -8,15 +8,19 @@ import tempfile
 import time
 import zipfile
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from . import db, secweb
 
-BULK_URL = "https://www.sec.gov/files/structureddata/data/insider-transactions-data-sets/{y}q{q}_form345.zip"
+DATASET_PAGE = "https://www.sec.gov/data-research/sec-markets-data/insider-transactions-data-sets"
 INDEX_URL = "https://www.sec.gov/Archives/edgar/daily-index/{y}/QTR{q}/master.{ymd}.idx"
 FILING_URL = "https://www.sec.gov/Archives/{name}"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
+
+WORKERS = 8  # threads share one pacer in secweb, so the request rate stays at 8 a second
+BATCH = 48
 
 DATE_FORMATS = ("%d-%b-%Y", "%Y-%m-%d", "%Y%m%d", "%m/%d/%Y", "%d-%b-%y")
 CODES = ("P", "S")
@@ -55,7 +59,34 @@ def quarters(first=(2006, 1), until: date | None = None):
         y, q = (y, q + 1) if q < 4 else (y + 1, 1)
 
 
+def fetch_many(urls):
+    """Fetch several URLs at the paced rate. Order is kept."""
+    with ThreadPoolExecutor(max_workers=WORKERS) as ex:
+        return list(ex.map(secweb.get, urls))
+
+
 # ---------------------------------------------------------------- bulk sets
+
+_LINK = re.compile(r'href="([^"]*?/(\d{4})q([1-4])_form345\.zip)"', re.I)
+
+
+def parse_bulk_links(html: str) -> dict:
+    """Quarter -> download URL, read from the SEC's own dataset page."""
+    out = {}
+    for href, y, q in _LINK.findall(html):
+        out[(int(y), int(q))] = href if href.startswith("http") else "https://www.sec.gov" + href
+    return out
+
+
+def bulk_links() -> dict:
+    page = secweb.get(DATASET_PAGE)
+    if not page:
+        raise secweb.SecError("The SEC dataset page was not found.")
+    links = parse_bulk_links(page.decode("utf-8", "replace"))
+    if not links:
+        raise secweb.SecError("No quarterly files are listed on the SEC dataset page.")
+    return links
+
 
 def _col(header, *names):
     up = [h.strip().upper() for h in header]
@@ -158,13 +189,15 @@ def load_bulk_zip(conn, zip_path, src: str, cap: float) -> dict:
 def ingest_bulk(conn, cap: float, max_seconds: float = 150, log=print) -> bool:
     """Load every posted quarter not yet loaded. Returns True when nothing is left."""
     t0 = time.monotonic()
+    links = None
     for y, q in quarters():
         key = f"bulk:{y}q{q}"
         if db.log_get(conn, key):
             continue
         if time.monotonic() - t0 > max_seconds:
             return False
-        data = secweb.get(BULK_URL.format(y=y, q=q))
+        links = links or bulk_links()
+        data = secweb.get(links[(y, q)]) if (y, q) in links else None
         if data is None:
             log(f"{y}q{q}: not posted yet")
             return True  # later quarters cannot be posted either
@@ -267,29 +300,30 @@ def ingest_live(conn, cap: float, max_seconds: float = 150, today: date | None =
         for form, filed, name in parse_master(raw.decode("latin-1")):
             if form == "4":
                 todo[Path(name).stem] = (filed, name)
-        n = 0
-        for acc, (filed, name) in todo.items():
-            if conn.execute("SELECT 1 FROM live_done WHERE accession=?", (acc,)).fetchone():
-                continue
+        pending = [
+            (acc, filed, name)
+            for acc, (filed, name) in todo.items()
+            if not conn.execute("SELECT 1 FROM live_done WHERE accession=?", (acc,)).fetchone()
+        ]
+        for i in range(0, len(pending), BATCH):
             if time.monotonic() - t0 > max_seconds:
-                conn.commit()
-                log(f"{d}: paused with filings left")
+                log(f"{d}: paused, {len(pending) - i} of {len(todo)} filings left")
                 return False
-            body = secweb.get(FILING_URL.format(name=name))
-            doc = parse_form4(body.decode("latin-1")) if body else None
-            if doc:
-                agg = aggregate(((acc, *r) for r in doc["rows"]), cap)
-                conn.executemany(
-                    db.INSERT_TRADE,
-                    [
-                        (a, td, code, doc["issuer"], doc["owner"], filed, v[0], v[1], v[2], v[3], "live")
-                        for (a, td, code), v in agg.items()
-                    ],
-                )
-            conn.execute("INSERT OR IGNORE INTO live_done(accession) VALUES (?)", (acc,))
-            n += 1
-            if n % 200 == 0:
-                conn.commit()
+            part = pending[i : i + BATCH]
+            bodies = fetch_many([FILING_URL.format(name=name) for _, _, name in part])
+            for (acc, filed, _), body in zip(part, bodies):
+                doc = parse_form4(body.decode("latin-1")) if body else None
+                if doc:
+                    agg = aggregate(((acc, *r) for r in doc["rows"]), cap)
+                    conn.executemany(
+                        db.INSERT_TRADE,
+                        [
+                            (a, td, code, doc["issuer"], doc["owner"], filed, v[0], v[1], v[2], v[3], "live")
+                            for (a, td, code), v in agg.items()
+                        ],
+                    )
+                conn.execute("INSERT OR IGNORE INTO live_done(accession) VALUES (?)", (acc,))
+            conn.commit()
         db.log_set(conn, key, str(len(todo)))
         conn.commit()
         log(f"{d}: {len(todo)} Form 4 filings")
@@ -322,22 +356,21 @@ def ingest_sic(conn, max_seconds: float = 150, log=print) -> bool:
             "GROUP BY issuer_cik ORDER BY SUM(dollars) DESC"
         )
     ]
-    for n, cik in enumerate(todo, 1):
+    for i in range(0, len(todo), BATCH):
         if time.monotonic() - t0 > max_seconds:
-            conn.commit()
-            log(f"sic: paused, {len(todo) - n + 1} issuers left")
+            log(f"sic: paused, {len(todo) - i} issuers left")
             return False
-        raw = secweb.get(SUBMISSIONS_URL.format(cik=cik))
-        sic, name = None, None
-        if raw:
-            try:
-                j = json.loads(raw)
-                sic = int(j["sic"]) if str(j.get("sic") or "").strip().isdigit() else None
-                name = j.get("name")
-            except (ValueError, KeyError):
-                pass
-        conn.execute("INSERT OR IGNORE INTO issuers(cik, sic, name) VALUES (?,?,?)", (cik, sic, name))
-        if n % 100 == 0:
-            conn.commit()
+        part = todo[i : i + BATCH]
+        for cik, raw in zip(part, fetch_many([SUBMISSIONS_URL.format(cik=c) for c in part])):
+            sic, name = None, None
+            if raw:
+                try:
+                    j = json.loads(raw)
+                    sic = int(j["sic"]) if str(j.get("sic") or "").strip().isdigit() else None
+                    name = j.get("name")
+                except (ValueError, KeyError):
+                    pass
+            conn.execute("INSERT OR IGNORE INTO issuers(cik, sic, name) VALUES (?,?,?)", (cik, sic, name))
+        conn.commit()
     conn.commit()
     return True
