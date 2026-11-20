@@ -1,0 +1,389 @@
+{
+ "schema": 1,
+ "name": "shell-ledger",
+ "frozen_on": "2026-11-20",
+ "mapping_sentence": "Shell k is the trailing window of phi^k trading days. What moves between shells is dollars traded, bought plus sold, per sector. Shells k apart couple with weight c(k), nothing fitted.",
+ "data": {
+  "source": "SEC Form 4 as filed on EDGAR, non-derivative table",
+  "document_types": [
+   "4"
+  ],
+  "transaction_codes": [
+   "P",
+   "S"
+  ],
+  "dollars": "shares times price per share, summed over qualifying rows",
+  "require_positive_shares_and_price": true,
+  "drop_row_if_dollars_above": 50000000000.0,
+  "drop_if_filed_before_transaction": true,
+  "drop_if_transaction_not_on_trading_day": true,
+  "timely_rule": "a row counts only if its filing date is no later than the third trading day after its transaction date",
+  "timely_trading_days": 3,
+  "history_start": "2006-01-03"
+ },
+ "calendar": {
+  "rule": "NYSE full-day closures by rule: weekends, New Year's Day (Sunday observed Monday, Saturday not observed), MLK Day, Presidents Day, Good Friday, Memorial Day, Juneteenth from 2022, Independence Day, Labor Day, Thanksgiving, Christmas; Saturday holidays observed Friday and Sunday holidays observed Monday unless stated",
+  "one_off_closures": [
+   "2007-01-02",
+   "2012-10-29",
+   "2012-10-30",
+   "2018-12-05",
+   "2025-01-09"
+  ],
+  "unscheduled_future_closures": "ignored; the calendar as coded at the freeze is the rule"
+ },
+ "sectors": {
+  "scheme": "Twelve industry groups by issuer SIC code, patterned on the Fama-French 12-industry grouping. The ranges below are the rule. An issuer with no SIC code, or a code in no range, is Other. The SIC code is the one EDGAR reports for the issuer when first looked up; it is cached and never updated.",
+  "order": [
+   "NoDur",
+   "Durbl",
+   "Manuf",
+   "Enrgy",
+   "Chems",
+   "BusEq",
+   "Telcm",
+   "Utils",
+   "Shops",
+   "Hlth",
+   "Money",
+   "Other"
+  ],
+  "ranges": {
+   "NoDur": [
+    [
+     100,
+     999
+    ],
+    [
+     2000,
+     2399
+    ],
+    [
+     2700,
+     2749
+    ],
+    [
+     2770,
+     2799
+    ],
+    [
+     3100,
+     3199
+    ],
+    [
+     3940,
+     3989
+    ]
+   ],
+   "Durbl": [
+    [
+     2500,
+     2519
+    ],
+    [
+     2590,
+     2599
+    ],
+    [
+     3630,
+     3659
+    ],
+    [
+     3710,
+     3711
+    ],
+    [
+     3714,
+     3714
+    ],
+    [
+     3716,
+     3716
+    ],
+    [
+     3750,
+     3751
+    ],
+    [
+     3792,
+     3792
+    ],
+    [
+     3900,
+     3939
+    ],
+    [
+     3990,
+     3999
+    ]
+   ],
+   "Manuf": [
+    [
+     2520,
+     2589
+    ],
+    [
+     2600,
+     2699
+    ],
+    [
+     2750,
+     2769
+    ],
+    [
+     3000,
+     3099
+    ],
+    [
+     3200,
+     3569
+    ],
+    [
+     3580,
+     3629
+    ],
+    [
+     3700,
+     3709
+    ],
+    [
+     3712,
+     3713
+    ],
+    [
+     3715,
+     3715
+    ],
+    [
+     3717,
+     3749
+    ],
+    [
+     3752,
+     3791
+    ],
+    [
+     3793,
+     3799
+    ],
+    [
+     3830,
+     3839
+    ],
+    [
+     3860,
+     3899
+    ]
+   ],
+   "Enrgy": [
+    [
+     1200,
+     1399
+    ],
+    [
+     2900,
+     2999
+    ]
+   ],
+   "Chems": [
+    [
+     2800,
+     2829
+    ],
+    [
+     2840,
+     2899
+    ]
+   ],
+   "BusEq": [
+    [
+     3570,
+     3579
+    ],
+    [
+     3660,
+     3692
+    ],
+    [
+     3694,
+     3699
+    ],
+    [
+     3810,
+     3829
+    ],
+    [
+     7370,
+     7379
+    ]
+   ],
+   "Telcm": [
+    [
+     4800,
+     4899
+    ]
+   ],
+   "Utils": [
+    [
+     4900,
+     4949
+    ]
+   ],
+   "Shops": [
+    [
+     5000,
+     5999
+    ],
+    [
+     7200,
+     7299
+    ],
+    [
+     7600,
+     7699
+    ]
+   ],
+   "Hlth": [
+    [
+     2830,
+     2839
+    ],
+    [
+     3693,
+     3693
+    ],
+    [
+     3840,
+     3859
+    ],
+    [
+     8000,
+     8099
+    ]
+   ],
+   "Money": [
+    [
+     6000,
+     6999
+    ]
+   ]
+  }
+ },
+ "series": {
+  "daily": "D[s,d] = qualifying dollars in sector s with transaction date d",
+  "floor_dollars": 10000,
+  "transform": "L[s,d] = log10(D[s,d] + floor_dollars)",
+  "market": "Lall[d] = log10(sum over sectors of D[s,d] + floor_dollars)"
+ },
+ "target": {
+  "period": "calendar week, Monday through Friday",
+  "value": "T[s,W] = mean of L[s,d] over the trading days d of week W"
+ },
+ "information": {
+  "cutoff": "features for week W use days up to and including the trading day that is three trading days before the last trading day preceding W",
+  "issue_deadline": "Monday 00:00 America/New_York of the target week. A forecast not written by then is never written, and that week is not scored.",
+  "no_overwrite": "forecast and score files are written once and never edited"
+ },
+ "grids": {
+  "span": "one trading day up to roughly two years",
+  "phi": {
+   "rule": "window k = phi^k rounded half up, k = 0..13",
+   "windows": [
+    1,
+    2,
+    3,
+    4,
+    7,
+    11,
+    18,
+    29,
+    47,
+    76,
+    123,
+    199,
+    322,
+    521
+   ],
+   "target_shell": 3
+  },
+  "doubling": {
+   "rule": "window k = 2^k, k = 0..9",
+   "windows": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32,
+    64,
+    128,
+    256,
+    512
+   ],
+   "target_shell": 2
+  },
+  "target_shell_rule": "the shell whose window is nearest the five-day period in log time"
+ },
+ "weights": {
+  "by": "shell index distance m = |target_shell - k|, in both grids",
+  "ck": "exp(-m/phi) / (1 + cos(2*m*ln(phi))^2)",
+  "fade": "exp(-m/phi)",
+  "equal": "1"
+ },
+ "predictors": {
+  "feature": "x_k = mean of L[s,d] over the trailing window k ending at the cutoff day",
+  "blend": "forecast = sum_k w(m_k) x_k / sum_k w(m_k)",
+  "phi_ck": "phi grid, ck weights. THE SHELL MODEL.",
+  "phi_fade": "phi grid, fade weights",
+  "phi_equal": "phi grid, equal weights",
+  "dbl_ck": "doubling grid, ck weights",
+  "dbl_fade": "doubling grid, fade weights. THE PRIMARY CONTROL.",
+  "dbl_equal": "doubling grid, equal weights",
+  "baseline_A": "mean of L over the trailing 521 trading days ending at the cutoff",
+  "baseline_B": "mean of L over the trailing 5 trading days ending at the cutoff",
+  "har": "per sector, ordinary least squares of T on an intercept and the trailing 1-, 5- and 22-day means of L at each week's own cutoff, refit every week on all earlier weeks whose targets were settled at issue time; at least 52 such weeks required"
+ },
+ "metric": "absolute error |forecast - T| in log10 units; a predictor's score is its mean over sectors and weeks",
+ "primary_contrast": {
+  "model": "phi_ck",
+  "control": "dbl_fade",
+  "weekly_difference": "d_W = mean over sectors of (|error of control| - |error of model|)",
+  "statistic": "t = mean(d) / sqrt(HAC variance / n), Bartlett kernel, 4 lags",
+  "hac_lags": 4,
+  "win": "t > 1.645: the shell model wins",
+  "lose": "t < -1.645: the shell model loses",
+  "tie": "otherwise: no detectable work from the golden ratio or the curve",
+  "everything_else": "all other predictors are reported for diagnosis and do not decide the verdict"
+ },
+ "prospective": {
+  "role": "the verdict",
+  "earliest_target_week": "2026-11-23",
+  "weeks": 26,
+  "rule": "the first 26 target weeks whose forecasts were written on time; the verdict is read once, when the 26th is scored"
+ },
+ "historical": {
+  "role": "a reading, not the verdict. Retrospective, but run under rules frozen before any data was fetched and with nothing fitted in the shell model or its control.",
+  "first_target_week": "2008-03-03",
+  "last_target_week": "2026-11-09",
+  "same_statistic": true
+ },
+ "event_test": {
+  "claim": "the moves start now",
+  "window": "trading days from November 20 through December 31",
+  "reference": "trading days from January 2 through November 19 of the same year",
+  "uplift": "U[y] = mean of Lall over the window minus mean of Lall over the reference, year y",
+  "years": [
+   2006,
+   2026
+  ],
+  "pass": "U[2026] is the largest of the 21 yearly values, which happens by luck 1 time in 21",
+  "final_on": "2027-01-06",
+  "interim": "readings before the final date are labelled interim and decide nothing",
+  "secondary_same_filers": "for each year y from 2009: the panel is every reporting owner with a qualifying row in each of the three prior calendar years; V[y] = ln(share of the panel with a qualifying row in the window / share with one in the reference). The rank of V[2026] among 18 years is reported and decides nothing. A filing with several reporting owners is assigned to the lowest owner CIK."
+ },
+ "logged_not_scored": [
+  "signed net dollars, buys minus sells, per sector and week",
+  "total dollars per sector and week"
+ ],
+ "public_ledger": "sector-level numbers only; no row about an individual filer leaves the local database"
+}

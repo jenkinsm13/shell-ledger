@@ -1,0 +1,7 @@
+# Local only. Per-filer rows and the contact address never leave this machine.
+data/
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
