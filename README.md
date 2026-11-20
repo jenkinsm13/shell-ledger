@@ -2,7 +2,7 @@
 
 A local tool that reads public SEC insider filings, writes dated forecasts of next week's insider dollar volume per sector, and scores itself when the filings arrive. A golden-ratio shell model competes against plain controls under rules frozen in advance.
 
-The rules are in [PREREGISTRATION.md](PREREGISTRATION.md) and `frozen.json`. They cannot be changed: the code checks `frozen.json` against `FROZEN.sha256` on every run.
+The rules are in [PREREGISTRATION.md](PREREGISTRATION.md) and `frozen.json`. The code checks `frozen.json` against `FROZEN.sha256` on every run, and refuses to run if any forecast in the ledger was written under a different hash. The one change made after the freeze, before any forecast, is recorded in [AMENDMENTS.md](AMENDMENTS.md).
 
 This is a measuring instrument. It does not say what to buy or sell.
 
@@ -14,7 +14,7 @@ This is a measuring instrument. It does not say what to buy or sell.
 ## Run
 
 ```
-./scripts/weekly.sh
+bash scripts/weekly.sh
 ```
 
 One pass does everything: loads new filings, scores any week that has settled, writes next week's forecast, updates the event test, writes a report, then commits the ledger, timestamps the new forecast and pushes.

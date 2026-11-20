@@ -286,3 +286,30 @@ def test_event_same_filers(tmp_path):
     assert max(v, key=lambda y: v[y]["v"]) == 2026 and v[2026]["panel"] == 40
     out = event.run(conn, s, dict(FZ, _sha256="t"))
     assert out["same_filers"]["rank_of_this_year"] == 1 and out["status"] == "interim"
+
+
+def test_bulk_links_are_read_from_the_page():
+    html = (
+        '<a href="/files/structureddata/data/insider-transactions-data-sets/2026q1_form345.zip">2026 Q1</a>'
+        '<a href="/files/datastandardsinnovation/data/insider-transactions-data-sets/2026q2_form345.zip">2026 Q2</a>'
+        '<a href="/other/thing.zip">x</a>'
+    )
+    links = ingest.parse_bulk_links(html)
+    assert set(links) == {(2026, 1), (2026, 2)}
+    assert links[(2026, 2)] == "https://www.sec.gov/files/datastandardsinnovation/data/insider-transactions-data-sets/2026q2_form345.zip"
+
+
+def test_rules_cannot_change_once_a_forecast_exists(project):
+    fz = config.load_frozen(project)
+    ledger.issue(project, fz, model.Model(make_series(5), fz), now=datetime(2026, 11, 21, 15, 0, tzinfo=timezone.utc))
+    config.load_frozen(project)  # still fine
+    text = (project / "frozen.json").read_text().replace("1.645", "1.0")
+    (project / "frozen.json").write_text(text)
+    (project / "FROZEN.sha256").write_text(config.frozen_sha256(project) + "  frozen.json\n")
+    with pytest.raises(config.FrozenError):
+        config.load_frozen(project)
+
+
+def test_frozen_cap_is_the_amended_one():
+    assert FZ["data"]["drop_row_if_dollars_above"] == 5e9
+    assert FZ["amendments"][0]["was"] == 5e10 and len(FZ["amendments"]) == 1

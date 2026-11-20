@@ -2,6 +2,18 @@
  "schema": 1,
  "name": "shell-ledger",
  "frozen_on": "2026-11-20",
+ "amendments": [
+  {
+   "number": 1,
+   "date": "2026-11-20",
+   "made_before": "any forecast was written, any predictor was run on real data, or any event-test number was computed",
+   "field": "data.drop_row_if_dollars_above",
+   "was": 50000000000.0,
+   "now": 5000000000.0,
+   "why": "The first load of real filings showed the 50 billion dollar line cap let through hundreds of impossible rows. See AMENDMENTS.md.",
+   "closes": "No further amendment is possible once the first forecast file exists; the code refuses to run if a forecast was written under a different hash."
+  }
+ ],
  "mapping_sentence": "Shell k is the trailing window of phi^k trading days. What moves between shells is dollars traded, bought plus sold, per sector. Shells k apart couple with weight c(k), nothing fitted.",
  "data": {
   "source": "SEC Form 4 as filed on EDGAR, non-derivative table",
@@ -14,7 +26,7 @@
   ],
   "dollars": "shares times price per share, summed over qualifying rows",
   "require_positive_shares_and_price": true,
-  "drop_row_if_dollars_above": 50000000000.0,
+  "drop_row_if_dollars_above": 5000000000.0,
   "drop_if_filed_before_transaction": true,
   "drop_if_transaction_not_on_trading_day": true,
   "timely_rule": "a row counts only if its filing date is no later than the third trading day after its transaction date",

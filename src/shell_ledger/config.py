@@ -44,6 +44,11 @@ def load_frozen(root: Path) -> dict:
             "frozen.json does not match FROZEN.sha256. The rules were changed after the freeze; "
             "nothing will run until the original file is restored."
         )
+    for f in sorted((root / "ledger" / "forecasts").glob("*.json")):
+        if json.loads(f.read_text()).get("frozen_sha256") != digest:
+            raise FrozenError(
+                f"{f.name} was written under different rules. The rules cannot change once a forecast exists."
+            )
     fz = json.loads((root / "frozen.json").read_text())
     fz["_sha256"] = digest
     return fz

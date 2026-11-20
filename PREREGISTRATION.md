@@ -2,6 +2,8 @@
 
 Frozen 2026-11-20, before any data was fetched. `frozen.json` is the rule; this page says the same thing in plain words. `FROZEN.sha256` holds the hash of `frozen.json`, and the code refuses to run if the two disagree.
 
+Amended once, the same day, before any forecast was written or any predictor was run: the data-error cap went from $50 billion to $5 billion a line. The reason and the evidence are in [AMENDMENTS.md](AMENDMENTS.md). No further amendment is possible once the first forecast exists.
+
 ## The model, in its author's sentence
 
 > Shell k is the trailing window of φ^k trading days. What moves between shells is dollars traded, bought plus sold, per sector. Shells k apart couple with weight c(k), nothing fitted.
@@ -9,7 +11,7 @@ Frozen 2026-11-20, before any data was fetched. `frozen.json` is the rule; this 
 ## What is measured
 
 - **Source.** SEC Form 4 as filed on EDGAR, non-derivative table. Amendments (4/A) and Form 5 are excluded.
-- **Rows that count.** Open-market purchases and sales (codes P and S) with positive shares and price. Dollars are shares times price. A row above $50 billion is treated as a data error and dropped.
+- **Rows that count.** Open-market purchases and sales (codes P and S) with positive shares and price. Dollars are shares times price. A single line above $5 billion is treated as a data error and dropped (originally $50 billion; see the amendment).
 - **Timely only.** A row counts only if it was filed by the third trading day after the trade. This makes every day's total final three trading days later, the same way in 2006 and next week.
 - **Sectors.** Twelve industry groups by the issuer's SIC code. The ranges are in `frozen.json`.
 - **Daily series.** L = log10(sector dollars + 10,000).
