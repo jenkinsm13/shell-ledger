@@ -1,0 +1,5 @@
+shell-ledger freeze
+commit 647f33b4ce41a9babf2391921674af8cb3aa4ce3
+tree f8fca0ac8c09c2f1162729fb03acfd56ef1149cc
+frozen.json sha256 a2155bf0232c01df4beb7b2715ca68f5aa2f8acd706ded2b1f9d042cd06e5635
+PREREGISTRATION.md sha256 34eeb6406ee5fbd3bb7a5c4709aa81ddb7647bb4a55b47e758ad8a83d83a3af9
