@@ -133,7 +133,8 @@ def cmd_weekly(a):
         print("forecast", ledger.issue(root, fz, model).name)
     except ledger.LedgerError as e:
         print("no forecast:", e)
-    if not (root / "ledger" / "historical" / "summary.json").exists() or a.historical:
+    hist = root / "ledger" / "historical" / "summary.json"
+    if a.historical or not hist.exists() or not json.loads(hist.read_text()).get("complete"):
         h = ledger.historical(root, fz, model)
         print("historical:", h["weeks"], "weeks,", h["reading"])
     ev = _event(root, fz, conn, model)

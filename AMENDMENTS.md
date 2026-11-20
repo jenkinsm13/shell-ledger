@@ -24,3 +24,7 @@ The rules were frozen on 2026-11-20 before any data was fetched. This file recor
 **The rule that lost.** $50 billion. It stays in the first commit and in `frozen.json` under `amendments`, with its hash in the git history.
 
 **The door closes.** Every forecast file records the hash of the rules it was written under, and the code refuses to run if a forecast exists under a different hash. After the first forecast there are no more amendments.
+
+## The door is already shut in practice
+
+The historical reading was first computed on 2026-11-20, about an hour after Amendment 1 was committed and timestamped. From that moment any further change to the rules would be a change made after seeing how the predictors perform, which is tuning. None will be made, even though the code would still allow one until the first forecast is written.
