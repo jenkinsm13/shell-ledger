@@ -1,0 +1,97 @@
+{
+ "kind": "historical",
+ "role": "a reading, not the verdict. Retrospective, but run under rules frozen before any data was fetched and with nothing fitted in the shell model or its control.",
+ "frozen_sha256": "884a06a9078ab1639c912278fece0ee6e50b2373f7095381f4a2712cad7ae3cc",
+ "first_week": "2008-03-03",
+ "last_week": "2026-11-09",
+ "complete": true,
+ "weeks": 976,
+ "units": "mean over the week's trading days of log10(sector dollars + 10000)",
+ "board": {
+  "har": {
+   "weeks": 976,
+   "mean_abs_error": 0.410192
+  },
+  "dbl_equal": {
+   "weeks": 976,
+   "mean_abs_error": 0.411351
+  },
+  "phi_equal": {
+   "weeks": 976,
+   "mean_abs_error": 0.412526
+  },
+  "dbl_ck": {
+   "weeks": 976,
+   "mean_abs_error": 0.44474
+  },
+  "dbl_fade": {
+   "weeks": 976,
+   "mean_abs_error": 0.444987
+  },
+  "phi_ck": {
+   "weeks": 976,
+   "mean_abs_error": 0.45052
+  },
+  "phi_fade": {
+   "weeks": 976,
+   "mean_abs_error": 0.452016
+  },
+  "baseline_A": {
+   "weeks": 976,
+   "mean_abs_error": 0.45775
+  },
+  "baseline_B": {
+   "weeks": 976,
+   "mean_abs_error": 0.471944
+  }
+ },
+ "primary_contrast": {
+  "weeks": 976,
+  "mean_difference": -0.005532472762978142,
+  "t": -11.35424955163347
+ },
+ "reading": "the shell model loses",
+ "shell_model_versus_each": {
+  "phi_fade": {
+   "weeks": 976,
+   "mean_difference": 0.001497,
+   "t": 10.027
+  },
+  "phi_equal": {
+   "weeks": 976,
+   "mean_difference": -0.037994,
+   "t": -17.61
+  },
+  "dbl_ck": {
+   "weeks": 976,
+   "mean_difference": -0.00578,
+   "t": -9.009
+  },
+  "dbl_fade": {
+   "weeks": 976,
+   "mean_difference": -0.005532,
+   "t": -11.354
+  },
+  "dbl_equal": {
+   "weeks": 976,
+   "mean_difference": -0.039168,
+   "t": -18.201
+  },
+  "baseline_A": {
+   "weeks": 976,
+   "mean_difference": 0.00723,
+   "t": 1.074
+  },
+  "baseline_B": {
+   "weeks": 976,
+   "mean_difference": 0.021424,
+   "t": 14.782
+  },
+  "har": {
+   "weeks": 976,
+   "mean_difference": -0.040328,
+   "t": -12.954
+  }
+ },
+ "note": "Positive differences mean the shell model had the smaller error."
+}
