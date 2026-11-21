@@ -17,6 +17,7 @@ from . import db, secweb
 DATASET_PAGE = "https://www.sec.gov/data-research/sec-markets-data/insider-transactions-data-sets"
 INDEX_URL = "https://www.sec.gov/Archives/edgar/daily-index/{y}/QTR{q}/master.{ymd}.idx"
 FILING_URL = "https://www.sec.gov/Archives/{name}"
+LISTING_URL = "https://www.sec.gov/Archives/edgar/daily-index/{y}/QTR{q}/index.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
 
 WORKERS = 8  # threads share one pacer in secweb, so the request rate stays at 8 a second
@@ -224,6 +225,19 @@ def bulk_through(conn):
 
 # ---------------------------------------------------------------- live index
 
+_MASTER = re.compile(r"master\.(\d{8})\.idx$")
+
+
+def parse_listing(raw: bytes) -> set:
+    """The dates that have a master index, from a quarter's directory listing."""
+    out = set()
+    for item in json.loads(raw)["directory"]["item"]:
+        m = _MASTER.match(item.get("name", ""))
+        if m:
+            out.add(datetime.strptime(m.group(1), "%Y%m%d").date())
+    return out
+
+
 def parse_master(text: str):
     """Yield (form, filed_iso, file_name) from an EDGAR master index."""
     for line in text.splitlines():
@@ -279,6 +293,7 @@ def ingest_live(conn, cap: float, max_seconds: float = 150, today: date | None =
     if start is None:
         raise secweb.SecError("Load the bulk history first (ingest-bulk).")
     d = start
+    listings = {}
     while True:
         d += timedelta(days=1)
         if d > today:
@@ -289,13 +304,19 @@ def ingest_live(conn, cap: float, max_seconds: float = 150, today: date | None =
         if db.log_get(conn, key):
             continue
         q = (d.month - 1) // 3 + 1
-        raw = secweb.get(INDEX_URL.format(y=d.year, q=q, ymd=d.strftime("%Y%m%d")))
-        if raw is None:
-            if d <= today - timedelta(days=2):  # a holiday: no index will ever exist
+        if (d.year, q) not in listings:
+            raw = secweb.get(LISTING_URL.format(y=d.year, q=q))
+            listings[(d.year, q)] = parse_listing(raw) if raw else set()
+        posted = listings[(d.year, q)]
+        if d not in posted:
+            if posted and max(posted) > d:  # a later day is posted, so this one never will be: a holiday
                 db.log_set(conn, key, "none")
                 conn.commit()
                 continue
-            return True  # today's or yesterday's index is not posted yet
+            return True  # not posted yet
+        raw = secweb.get(INDEX_URL.format(y=d.year, q=q, ymd=d.strftime("%Y%m%d")))
+        if raw is None:
+            return True
         todo = {}
         for form, filed, name in parse_master(raw.decode("latin-1")):
             if form == "4":

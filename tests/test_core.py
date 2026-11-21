@@ -313,3 +313,10 @@ def test_rules_cannot_change_once_a_forecast_exists(project):
 def test_frozen_cap_is_the_amended_one():
     assert FZ["data"]["drop_row_if_dollars_above"] == 5e9
     assert FZ["amendments"][0]["was"] == 5e10 and len(FZ["amendments"]) == 1
+
+
+def test_directory_listing_gives_posted_days():
+    raw = json.dumps({"directory": {"item": [
+        {"name": "master.20261009.idx"}, {"name": "master.20261013.idx"},
+        {"name": "form.20261009.idx"}, {"name": "sitemap.20261009.xml"}]}}).encode()
+    assert ingest.parse_listing(raw) == {date(2026, 10, 9), date(2026, 10, 13)}

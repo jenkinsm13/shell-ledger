@@ -52,6 +52,10 @@ def get(url: str, retries: int = 4, timeout: int = 90):
             if e.code == 404:
                 return None
             if e.code == 403:
+                body = e.read()
+                # EDGAR answers 403, not 404, for an archive file that does not exist.
+                if "/Archives/" in url and b"Request Rate" not in body and b"Automated" not in body:
+                    return None
                 raise SecError(
                     f"The SEC refused {url} (403). Stopping instead of retrying. "
                     "Check that SEC_USER_AGENT names a real contact, then wait ten minutes."
