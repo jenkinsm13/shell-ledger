@@ -82,7 +82,11 @@ def ticker_map(payload: dict, exchanges: list) -> dict:
     return out
 
 
-def sec_tickers(root: Path, rules: dict, get=secweb.get) -> dict:
+def _sec_get(url: str):
+    return secweb.get(url, retries=1, timeout=20)  # one quick try; the saved copy is the fallback
+
+
+def sec_tickers(root: Path, rules: dict, get=_sec_get) -> dict:
     """The current list from the SEC, or last week's saved copy if the SEC cannot be reached."""
     cache = config.data_dir(root) / "paper" / "tickers.json"
     cache.parent.mkdir(exist_ok=True)
@@ -187,6 +191,8 @@ def write_orders(root: Path, rules: dict, conn, s, fz: dict, filed_through: date
     eday = entry_day(monday)
     if add_trading_days(filed_through, rules["orders"]["max_stale_trading_days"]) < eday:
         return None, f"filings are loaded only through {filed_through}: too old to write orders from"
+    if callable(tickers):  # fetched only now, when orders are really about to be written
+        tickers = tickers()
     candidates = group_buy_candidates(conn, rules, filed_through, tickers)
     picks = sector_picks(s, fz, rules)
     salt = secrets.token_hex(16)
@@ -561,9 +567,8 @@ def step(root: Path, conn, fz: dict, s, filed_through: date, max_seconds: float 
     rules = load_rules(root)
     info = {}
     try:
-        if tickers is None:
-            tickers = sec_tickers(root, rules)
-        path, why = write_orders(root, rules, conn, s, fz, filed_through, tickers, now)
+        source = tickers if tickers is not None else (lambda: sec_tickers(root, rules))
+        path, why = write_orders(root, rules, conn, s, fz, filed_through, source, now)
         info["orders"] = f"wrote {path.name}" if path else why
     except Exception as e:  # the fake-money test must never stop the real ledger
         info["orders"] = f"not written: {e}"

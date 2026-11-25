@@ -104,20 +104,21 @@ class Store:
         req = urllib.request.Request(
             url, headers={"Authorization": f"Bearer {self.key}", "User-Agent": "shell-ledger", "Accept": "application/json"}
         )
-        for attempt in range(3):
+        # Short timeouts and one retry: a slow price service must never hold up the weekly ledger run.
+        for attempt in range(2):
             self._last = time.monotonic()
             try:
-                with urllib.request.urlopen(req, timeout=40) as r:
+                with urllib.request.urlopen(req, timeout=12) as r:
                     return json.loads(r.read().decode())
             except urllib.error.HTTPError as e:
                 body = e.read().decode(errors="replace")[:300]
-                if e.code == 429 and attempt < 2:
-                    time.sleep(20)
+                if e.code == 429 and attempt == 0:
+                    time.sleep(self._gap)
                     continue
                 raise PriceError(f"the price service answered {e.code}: {body}") from None
-            except (urllib.error.URLError, TimeoutError) as e:
-                if attempt < 2:
-                    time.sleep(5)
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                if attempt == 0:
+                    time.sleep(2)
                     continue
                 raise PriceError(f"the price service could not be reached: {e}") from None
         raise PriceError("the price service kept refusing")

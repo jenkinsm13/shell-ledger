@@ -495,6 +495,9 @@ def test_fake_money_orders_are_sealed(fake_money, tmp_path):
     wednesday = datetime(2026, 11, 25, 15, 0, tzinfo=timezone.utc)  # right week, but orders wait for the weekend
     midweek = paper.write_orders(fake_money, rules, conn, s, fz, date(2026, 11, 24), tickers, wednesday)
     assert midweek[0] is None and "too early" in midweek[1]
+    asked = []
+    paper.write_orders(fake_money, rules, conn, s, fz, date(2026, 11, 24), lambda: asked.append(1) or tickers, wednesday)
+    assert asked == []  # the SEC's company list is not even fetched until orders are due
     assert "try 1: Four Buyers Corp (FOUR), 4 insiders bought $240 thousand" in "\n".join(paper.preview(fake_money, conn, fz, s, date(2026, 11, 27), tickers))
     saturday = datetime(2026, 11, 28, 15, 0, tzinfo=timezone.utc)
     stale = paper.write_orders(fake_money, rules, conn, s, fz, date(2026, 11, 20), tickers, saturday)

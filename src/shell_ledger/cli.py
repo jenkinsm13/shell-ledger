@@ -185,7 +185,7 @@ def cmd_weekly(a):
     print("event:", ev["status"], "rank", ev["rank_of_this_year"], "of", ev["years_compared"])
     fake = None
     try:
-        fake = paper.step(root, conn, fz, model.s, ingest.filed_through(conn), min(60.0, a.max_seconds))
+        fake = paper.step(root, conn, fz, model.s, ingest.filed_through(conn), min(45.0, a.max_seconds))
         print("fake money: orders", fake["info"].get("orders"), "| prices", fake["prices"])
     except Exception as e:  # the fake-money test must never stop the real ledger
         print("fake money: skipped,", e)
