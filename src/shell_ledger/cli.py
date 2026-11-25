@@ -7,7 +7,7 @@ import sys
 import time
 from datetime import date, datetime, timezone
 
-from . import config, db, event, ingest, ledger, report, secweb
+from . import config, db, event, ingest, ledger, readout, report, secweb
 from .model import Model
 from .series import build
 
@@ -103,16 +103,34 @@ def cmd_event(a):
     print(json.dumps({k: ev[k] for k in ("status", "settled_through", "rank_of_this_year", "years_compared", "passes")}))
 
 
+def _reports(root, fz, conn, model, ev=None):
+    """Write the public report (sector totals) and the local weekly message (with company names)."""
+    today = date.today()
+    board = ledger.scoreboard(root, fz)
+    pub, msg = readout.build(conn, root, fz, model.s, board, today, ingest.filed_through(conn), ev)
+    text = report.build(root, fz, board, pub)
+    (config.ledger_dir(root, "reports") / f"{today.isoformat()}.md").write_text(text)
+    local = config.data_dir(root) / "readouts"
+    local.mkdir(exist_ok=True)
+    (local / f"{today.isoformat()}.md").write_text(msg)
+    (local / "latest.md").write_text(msg)
+    return text, msg
+
+
 def cmd_report(a):
+    """Write and print the public report: sector totals only."""
     root, fz, conn = _open()
-    text = report.build(root, fz, ledger.scoreboard(root, fz), date.today())
-    path = config.ledger_dir(root, "reports") / f"{date.today().isoformat()}.md"
-    path.write_text(text)
-    print(text)
+    print(_reports(root, fz, conn, _model(conn, fz))[0])
+
+
+def cmd_readout(a):
+    """Write and print the weekly message: where the money moved, with company names. Local only."""
+    root, fz, conn = _open()
+    print(_reports(root, fz, conn, _model(conn, fz))[1])
 
 
 def cmd_weekly(a):
-    """Ingest, score what has settled, write next week's forecast, event test, report."""
+    """Ingest, score what has settled, write next week's forecast, event test, report and readout."""
     root, fz, conn = _open()
     t0 = time.monotonic()
     code = cmd_ingest(a)
@@ -139,8 +157,7 @@ def cmd_weekly(a):
         print("historical:", h["weeks"], "weeks,", h["reading"])
     ev = _event(root, fz, conn, model)
     print("event:", ev["status"], "rank", ev["rank_of_this_year"], "of", ev["years_compared"])
-    text = report.build(root, fz, ledger.scoreboard(root, fz), date.today())
-    (config.ledger_dir(root, "reports") / f"{date.today().isoformat()}.md").write_text(text)
+    _reports(root, fz, conn, model, ev)
     print("WEEKLY: done")
     return 0
 
@@ -157,6 +174,7 @@ def main(argv=None):
         ("historical", cmd_historical),
         ("event", cmd_event),
         ("report", cmd_report),
+        ("readout", cmd_readout),
         ("weekly", cmd_weekly),
     ]:
         sp = sub.add_parser(name, help=(fn.__doc__ or "").strip() or None)

@@ -17,8 +17,14 @@ if [ "$code" -ne 0 ]; then echo "STOPPED with code $code"; exit "$code"; fi
 G="$HOME/shell-ledger-gitdir"
 rm -rf "$G" && cp -a "$P/.git" "$G"
 g() { git --git-dir="$G" --work-tree="$P" "$@"; }
+export GIT_TERMINAL_PROMPT=0
+# The whole history in one file under data/, so a machine that holds the GitHub login can publish it.
+bundle() {
+  g bundle create -q "$HOME/shell-ledger.bundle" main && cp "$HOME/shell-ledger.bundle" "$P/data/shell-ledger.bundle" \
+    && echo "bundle: data/shell-ledger.bundle at $(g rev-parse --short main)"
+}
 g add ledger
-if g diff --cached --quiet; then echo "DONE: ledger unchanged"; exit 0; fi
+if g diff --cached --quiet; then bundle; echo "DONE: ledger unchanged"; exit 0; fi
 new=$(g diff --cached --name-only --diff-filter=A -- ledger/forecasts | grep '\.json$' || true)
 g commit -q -m "ledger: $(date -u +%Y-%m-%dT%H:%MZ)" ${LEDGER_COMMIT_TRAILER:+-m "$LEDGER_COMMIT_TRAILER"}
 for f in $new; do
@@ -26,7 +32,7 @@ for f in $new; do
 done
 g diff --cached --quiet || g commit -q -m "ledger: timestamps" ${LEDGER_COMMIT_TRAILER:+-m "$LEDGER_COMMIT_TRAILER"}
 if g remote get-url origin >/dev/null 2>&1; then
-  g push -q origin HEAD || echo "push failed: the commits are local only"
+  g push -q origin HEAD 2>/dev/null || echo "not pushed from here (no GitHub login in this sandbox): publish from the bundle"
 else
   echo "no remote set: the commits are local only"
 fi
@@ -37,4 +43,5 @@ for f in index HEAD COMMIT_EDITMSG; do [ -f "$G/$f" ] && cp "$G/$f" "$P/.git/$f"
 (cd "$G" && find refs logs -type f 2>/dev/null) | while read -r f; do
   mkdir -p "$P/.git/$(dirname "$f")"; cp "$G/$f" "$P/.git/$f"
 done
+bundle
 echo "DONE: ledger committed at $(g rev-parse --short HEAD)"

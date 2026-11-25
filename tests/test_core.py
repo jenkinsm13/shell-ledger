@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from shell_ledger import config, db, event, ingest, ledger, model, series, tradingdays as td
+from shell_ledger import config, db, event, ingest, ledger, model, readout, report, series, tradingdays as td
 
 ROOT = Path(__file__).resolve().parents[1]
 FZ = json.loads((ROOT / "frozen.json").read_text())
@@ -320,3 +320,46 @@ def test_directory_listing_gives_posted_days():
         {"name": "master.20261009.idx"}, {"name": "master.20261013.idx"},
         {"name": "form.20261009.idx"}, {"name": "sitemap.20261009.xml"}]}}).encode()
     assert ingest.parse_listing(raw) == {date(2026, 10, 9), date(2026, 10, 13)}
+
+
+def test_readout_words():
+    assert readout.usd(9.38e9) == "$9.38 billion" and readout.usd(12.3e9) == "$12.3 billion"
+    assert readout.usd(686e6) == "$686 million" and readout.usd(73_000) == "$73 thousand"
+    assert readout.usd(999.7e6) == "$1.00 billion" and readout.usd(12) == "$12"
+    assert readout.company("PRIMO BRANDS CORP") == "Primo Brands Corp" and readout.company("IBM LLC") == "IBM LLC"
+    a = np.ones(600)
+    a[590:] = 3
+    x = readout.stretch(a, 590, 599)
+    assert x["now"] == 30 and x["usual"] == 10 and x["beats"] == 1.0
+
+
+def test_readout_texts(project, tmp_path):
+    fz = config.load_frozen(project)
+    s = make_series(5)
+    hl = fz["sectors"]["order"].index("Hlth")
+    s.SELL[hl, s.valid - 9 : s.valid + 1] *= 50  # plant heavy selling in one sector
+    m = model.Model(s, fz)
+    ledger.issue(project, fz, m, now=datetime(2026, 11, 21, 15, 0, tzinfo=timezone.utc))
+    ledger.score_pending(project, fz, m)
+    conn = db.connect(tmp_path / "t.sqlite")
+    conn.execute("INSERT INTO issuers(cik, sic, name) VALUES (1, 2834, 'ACME ROCKETS INC')")
+    conn.execute(db.INSERT_TRADE, ("A-1", "2026-12-10", "S", 1, 9, "2026-12-11", 5e7, 1e6, 5e7, 1, "test"))
+    conn.execute(db.INSERT_TRADE, ("A-2", "2026-12-10", "P", 1, 9, "2026-12-11", 2e6, 1e5, 1e6, 2, "test"))
+    board = ledger.scoreboard(project, fz)
+    pub, msg = readout.build(conn, project, fz, s, board, date(2026, 12, 15), date(2026, 12, 15))
+    assert "Heavier selling than usual: Health and pharma" in pub
+    assert "Expected for the week of Nov 23" in pub and "Week of Nov 23: the prediction landed" in pub
+    assert "counted so far (through Dec 15)" in pub and "| Health and pharma |" in pub
+    assert "Acme" not in pub  # company names never reach the public text
+    assert "Sold: Acme Rockets Inc $50 million (one entry is most of this" in msg
+    assert "Bought: Acme Rockets Inc $2 million." in msg
+    text = report.build(project, fz, board, pub)
+    assert text.startswith("# Insider money moves") and "For the record" in text and "Acme" not in text
+
+
+def test_readout_before_anything_is_written(project, tmp_path):
+    fz = config.load_frozen(project)
+    conn = db.connect(tmp_path / "t.sqlite")
+    board = ledger.scoreboard(project, fz)
+    pub, msg = readout.build(conn, project, fz, make_series(3), board, date(2026, 12, 15), date(2026, 12, 15))
+    assert "No predicted week has begun yet." in pub and "Sold: none." in msg

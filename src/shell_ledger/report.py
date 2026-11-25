@@ -1,11 +1,10 @@
-"""A plain-language weekly report, built only from files already in the ledger."""
+"""The weekly report: the money-moves readout first, then the record of which method is ahead."""
 from __future__ import annotations
 
 import json
-from datetime import date
 from pathlib import Path
 
-from . import config
+from .readout import event_reading
 
 LABEL = {
     "phi_ck": "Shell model (golden-ratio windows, curve weights)",
@@ -20,19 +19,6 @@ LABEL = {
 }
 
 
-def money(log10_value: float) -> str:
-    v = max(10 ** log10_value - 10000, 0)
-    for unit, size in (("B", 1e9), ("M", 1e6), ("K", 1e3)):
-        if v >= size:
-            return f"${v / size:,.1f}{unit}"
-    return f"${v:,.0f}"
-
-
-def _latest(d: Path):
-    files = sorted(d.glob("*.json"))
-    return json.loads(files[-1].read_text()) if files else None
-
-
 def _board(board: dict) -> list:
     out = ["| Predictor | Weeks | Average error |", "| --- | --- | --- |"]
     for name, v in board.items():
@@ -40,52 +26,22 @@ def _board(board: dict) -> list:
     return out
 
 
-def build(root: Path, fz: dict, board: dict, today: date) -> str:
-    fc = _latest(config.ledger_dir(root, "forecasts"))
-    sc = _latest(config.ledger_dir(root, "scores"))
-    ev = _latest(config.ledger_dir(root, "event"))
+def record(root: Path, fz: dict, board: dict) -> list:
+    """Every method's score, winners and losers alike, and the formal event-test reading."""
+    ev = event_reading(root)
     hist_file = root / "ledger" / "historical" / "summary.json"
     hist = json.loads(hist_file.read_text()) if hist_file.exists() else None
-    L = [f"# shell-ledger report, {today.isoformat()}", ""]
-    L += [
-        "Errors are in log10 units of a sector's typical daily insider dollars. "
-        "An error of 0.30 is a miss by a factor of two; 0.04 is a miss of about 10%.",
+    L = [
+        "## For the record: which prediction method is ahead",
+        "",
+        "Nine methods each write a prediction every week, under rules frozen in advance "
+        "(see PREREGISTRATION.md). All of them are listed, the ones behind as well as the ones ahead. "
+        "Errors are in log10 units of a sector's typical daily insider dollars: "
+        "0.30 is a miss by a factor of two, 0.04 a miss of about 10%.",
         "",
     ]
 
-    L += ["## What was predicted", ""]
-    if fc:
-        L += [
-            f"For the week of {fc['target_week']}, written {fc['issued_utc']} from data through {fc['cutoff_day']}. "
-            "The shell model's forecast of typical daily dollars traded by insiders, buys plus sells:",
-            "",
-            "| Sector | Shell model | Primary control |",
-            "| --- | --- | --- |",
-        ]
-        for s, a, b in zip(fc["sectors"], fc["predictions"]["phi_ck"], fc["predictions"]["dbl_fade"]):
-            L.append(f"| {s} | {money(a)} | {money(b)} |")
-    else:
-        L.append("No forecast has been written yet.")
-    L.append("")
-
-    L += ["## What happened", ""]
-    if sc:
-        best = min(sc["mean_abs_error"], key=sc["mean_abs_error"].get)
-        L += [
-            f"The week of {sc['target_week']} is settled. Closest that week: {LABEL.get(best, best)}, "
-            f"average error {sc['mean_abs_error'][best]:.4f}. The shell model's was {sc['mean_abs_error']['phi_ck']:.4f}.",
-            "",
-            "| Sector | Actual | Shell forecast error | Net buys minus sells (logged, not scored) |",
-            "| --- | --- | --- | --- |",
-        ]
-        net = sc["logged_not_scored"]["net_buy_minus_sell_dollars"]
-        for i, s in enumerate(sc["sectors"]):
-            L.append(f"| {s} | {money(sc['actual'][i])} | {sc['abs_error']['phi_ck'][i]:.3f} | {net[i]:+,.0f} |")
-    else:
-        L.append("No week has been scored yet. A week settles three trading days after its last day.")
-    L.append("")
-
-    L += ["## Who is ahead", ""]
+    L += ["### Scored weeks so far", ""]
     c = board["primary_contrast"]
     if board["board"]:
         L += _board(board["board"]) + [""]
@@ -102,7 +58,7 @@ def build(root: Path, fz: dict, board: dict, today: date) -> str:
         hc = hist["primary_contrast"]
         t = f"{hc['t']:.2f}" if hc["t"] == hc["t"] else "n/a"
         L += [
-            "## Historical reading",
+            "### The same rules run over past weeks",
             "",
             f"The same frozen rules run over {hist['weeks']} past weeks, {hist['first_week']} to {hist['last_week']}"
             + ("" if hist["complete"] else " (incomplete: recent filings still loading)")
@@ -111,7 +67,7 @@ def build(root: Path, fz: dict, board: dict, today: date) -> str:
             "",
         ] + _board(hist["board"]) + [""]
 
-    L += ["## The event test", ""]
+    L += ["### The event test, formal reading", ""]
     mine = ev["uplift_by_year"].get(str(fz["event_test"]["years"][1])) if ev else None
     if ev and not mine:
         L.append(
@@ -133,4 +89,8 @@ def build(root: Path, fz: dict, board: dict, today: date) -> str:
     else:
         L.append("No reading yet.")
     L.append("")
-    return "\n".join(L)
+    return L
+
+
+def build(root: Path, fz: dict, board: dict, readout_text: str) -> str:
+    return readout_text.rstrip("\n") + "\n\n" + "\n".join(record(root, fz, board))
