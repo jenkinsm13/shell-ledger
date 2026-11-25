@@ -7,7 +7,8 @@
  "rounds": 13,
  "end_day": "2027-02-26",
  "orders": {
-  "written": "before the entry week begins, New York time; a round whose orders are not written in time is skipped, never backfilled",
+  "written": "on the weekend before the entry week, New York time: not before Saturday, and before Monday begins; a round whose orders are not written in time is skipped, never backfilled",
+  "not_before_days": 2,
   "entry_day": "the first trading day of the entry week",
   "max_stale_trading_days": 3
  },

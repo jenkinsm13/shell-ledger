@@ -177,6 +177,9 @@ def write_orders(root: Path, rules: dict, conn, s, fz: dict, filed_through: date
     monday = next_target_monday(now)
     if monday not in entry_weeks(rules):
         return None, "outside the test window"
+    opens = datetime(monday.year, monday.month, monday.day, tzinfo=NY) - timedelta(days=rules["orders"]["not_before_days"])
+    if now < opens:
+        return None, f"too early: orders for the week of {monday} are written on the weekend before it"
     private = order_dir(root) / f"{monday.isoformat()}.json"
     public = config.ledger_dir(root, "paper") / f"{monday.isoformat()}.json"
     if private.exists() or public.exists():
@@ -208,6 +211,26 @@ def write_orders(root: Path, rules: dict, conn, s, fz: dict, filed_through: date
     private.write_text(json.dumps(order, indent=1) + "\n")
     public.write_text(json.dumps(commitment, indent=1) + "\n")
     return private, None
+
+
+def preview(root: Path, conn, fz: dict, s, filed_through: date, tickers=None) -> list:
+    """What the orders would be if they were written from today's filings. Writes nothing."""
+    rules = load_rules(root)
+    tickers = sec_tickers(root, rules) if tickers is None else tickers
+    cands = group_buy_candidates(conn, rules, filed_through, tickers)
+    picks = sector_picks(s, fz, rules)
+    n = rules["group_buys"]["new_positions_per_round"]
+    L = [f"Preview from filings through {filed_through.isoformat()}. Nothing is written or sealed."]
+    for c in cands:
+        L.append(
+            f"- {'try' if c['rank'] <= n else 'backup'} {c['rank']}: {c['name']} ({c['ticker']}), "
+            f"{c['insiders']} insiders bought {readout.usd(c['dollars'])}"
+        )
+    if not cands:
+        L.append("- No company had enough insiders buying.")
+    if picks:
+        L.append("- Sector tilt would hold: " + ", ".join(f"{readout.SECTOR[k]} ({rules['sector_tilt']['funds'][k]})" for k in picks["sectors"]))
+    return L
 
 
 # ---- the replay

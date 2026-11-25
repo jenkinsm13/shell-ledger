@@ -140,6 +140,9 @@ def cmd_paper(a):
     root, fz, conn = _open()
     model = _model(conn, fz)
     through = ingest.filed_through(conn)
+    if a.preview:
+        print("\n".join(paper.preview(root, conn, fz, model.s, through)))
+        return 0
     if a.rehearse:
         out = paper.rehearse(root, conn, fz, model.s, date.fromisoformat(a.rehearse), a.max_seconds)
     else:
@@ -217,6 +220,7 @@ def main(argv=None):
         if name == "paper":
             sp.add_argument("--max-seconds", type=float, default=100, help="time budget for loading prices")
             sp.add_argument("--rehearse", metavar="MONDAY", help="run the same rules over thirteen past weeks starting this Monday")
+            sp.add_argument("--preview", action="store_true", help="show what the orders would be today; writes nothing")
         if name == "weekly":
             sp.add_argument("--historical", action="store_true", help="rerun the historical reading")
     a = p.parse_args(argv)

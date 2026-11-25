@@ -492,6 +492,10 @@ def test_fake_money_orders_are_sealed(fake_money, tmp_path):
     s = make_series(5)
     early = datetime(2026, 11, 21, 15, 0, tzinfo=timezone.utc)
     assert paper.write_orders(fake_money, rules, conn, s, fz, date(2026, 11, 20), tickers, early) == (None, "outside the test window")
+    wednesday = datetime(2026, 11, 25, 15, 0, tzinfo=timezone.utc)  # right week, but orders wait for the weekend
+    midweek = paper.write_orders(fake_money, rules, conn, s, fz, date(2026, 11, 24), tickers, wednesday)
+    assert midweek[0] is None and "too early" in midweek[1]
+    assert "try 1: Four Buyers Corp (FOUR), 4 insiders bought $240 thousand" in "\n".join(paper.preview(fake_money, conn, fz, s, date(2026, 11, 27), tickers))
     saturday = datetime(2026, 11, 28, 15, 0, tzinfo=timezone.utc)
     stale = paper.write_orders(fake_money, rules, conn, s, fz, date(2026, 11, 20), tickers, saturday)
     assert stale[0] is None and "too old" in stale[1]

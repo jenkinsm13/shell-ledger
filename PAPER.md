@@ -14,7 +14,7 @@ The exact numbers are in `paper_rules.json`. Its hash is in `PAPER_RULES.sha256`
 
 ## When things happen
 
-- Orders are written before the week begins, New York time, from filings loaded through the Friday before. A week whose orders are not written in time is skipped. It is never filled in afterwards.
+- Orders are written on the weekend before the week begins, New York time, from the filings loaded by then: normally everything through Friday. A week whose orders are not written in time is skipped. It is never filled in afterwards.
 - Buys and sells happen at the opening price of the week's first trading day. Accounts are valued at closing prices.
 - A stock trade costs 0.25% of its value each way, and a fund trade 0.05%.
 - Cash dividends are added on the ex-dividend day. Share counts follow stock splits.
