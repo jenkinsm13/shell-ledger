@@ -135,35 +135,70 @@ class Store:
         self._days[d] = out
         return True
 
-    def _fetch_actions(self, lo: date, hi: date, deadline: float) -> bool:
-        kinds = (
-            ("splits", "execution_date", lambda r: float(r["split_to"]) / float(r["split_from"])),
-            ("dividends", "ex_dividend_date", lambda r: float(r["cash_amount"])),
-        )
-        found = {"splits": {}, "dividends": {}}
-        for kind, field, value in kinds:
-            q = urllib.parse.urlencode({f"{field}.gte": lo.isoformat(), f"{field}.lte": hi.isoformat(), "limit": 1000})
-            url = f"{HOST}/v3/reference/{kind}?{q}"
-            while url:
-                if time.monotonic() + self._gap > deadline:
-                    return False
-                page = self._get(url)
-                for r in page.get("results") or []:
-                    try:
-                        if kind == "dividends" and r.get("currency", "USD") != "USD":
-                            continue
-                        day, tk, v = r[field], r["ticker"], value(r)
-                    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+    def _first_url(self, kind: str, lo: date, hi: date) -> str:
+        field = {"splits": "execution_date", "dividends": "ex_dividend_date"}[kind]
+        q = urllib.parse.urlencode({f"{field}.gte": lo.isoformat(), f"{field}.lte": hi.isoformat(), "limit": 1000})
+        return f"{HOST}/v3/reference/{kind}?{q}"
+
+    def _save_actions(self) -> None:
+        self._actions_file.write_text(json.dumps(self._actions, separators=(",", ":")))
+
+    def _fetch_actions(self, lo: date, hi: date, deadline: float):
+        """Splits and dividends of every stock from lo to hi, a page at a time. Returns (finished, pages read).
+
+        A week of dividends alone runs past one page. The place reached is saved after every page,
+        so a run that is cut short carries on from there instead of starting the range again.
+        """
+        cur = self._actions.get("cursor")
+        if not cur or cur["lo"] != lo.isoformat() or cur["hi"] != hi.isoformat():
+            cur = {
+                "lo": lo.isoformat(),
+                "hi": hi.isoformat(),
+                "kind": "splits",
+                "url": self._first_url("splits", lo, hi),
+                "found": {"splits": {}, "dividends": {}},
+            }
+        pages = 0
+        while True:
+            if time.monotonic() + self._gap > deadline:
+                self._actions["cursor"] = cur
+                self._save_actions()
+                return False, pages
+            try:
+                page = self._get(cur["url"])
+            except PriceError:
+                self._actions.pop("cursor", None)  # the saved place may have gone stale: start the range again next time
+                self._save_actions()
+                raise
+            pages += 1
+            kind = cur["kind"]
+            for r in page.get("results") or []:
+                try:
+                    if kind == "splits":
+                        day, tk, v = r["execution_date"], r["ticker"], float(r["split_to"]) / float(r["split_from"])
+                    elif r.get("currency", "USD") != "USD":
                         continue
-                    slot = found[kind].setdefault(day, {})
-                    slot[tk] = slot.get(tk, 0.0) + v if kind == "dividends" else slot.get(tk, 1.0) * v
-                url = page.get("next_url")
-        for kind in found:
-            for day, items in found[kind].items():
+                    else:
+                        day, tk, v = r["ex_dividend_date"], r["ticker"], float(r["cash_amount"])
+                except (KeyError, TypeError, ValueError, ZeroDivisionError):
+                    continue
+                slot = cur["found"][kind].setdefault(day, {})
+                slot[tk] = slot.get(tk, 0.0) + v if kind == "dividends" else slot.get(tk, 1.0) * v
+            if page.get("next_url"):
+                cur["url"] = page["next_url"]
+            elif kind == "splits":
+                cur["kind"], cur["url"] = "dividends", self._first_url("dividends", lo, hi)
+            else:
+                break
+            self._actions["cursor"] = cur
+            self._save_actions()
+        for kind, by_day in cur["found"].items():
+            for day, items in by_day.items():
                 self._actions[kind].setdefault(day, {}).update(items)
         self._actions["through"] = hi.isoformat()
-        self._actions_file.write_text(json.dumps(self._actions, separators=(",", ":")))
-        return True
+        self._actions.pop("cursor", None)
+        self._save_actions()
+        return True, pages
 
     def ensure(self, days: list, actions_from: date, max_seconds: float) -> dict:
         """Fetch what is missing, within the time allowed. Never raises: problems come back in the result."""
@@ -185,9 +220,10 @@ class Store:
                 hi = days[-1]
                 lo = max(actions_from, (self.actions_through() or actions_from - timedelta(days=1)) + timedelta(days=1))
                 if lo <= hi:
-                    if not self._fetch_actions(lo, hi, deadline):
+                    done, pages = self._fetch_actions(lo, hi, deadline)
+                    out["fetched"] += pages
+                    if not done:
                         return out
-                    out["fetched"] += 1
             out["complete"] = True
         except PriceError as e:
             out["error"] = str(e)

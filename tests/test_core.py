@@ -557,7 +557,7 @@ def test_price_store(tmp_path):
     st = prices.Store(tmp_path, get=get, gap=0)
     d1, d2, d3 = date(2026, 11, 30), date(2026, 12, 1), date(2026, 12, 2)
     res = st.ensure([d1, d2, d3], d1, 30)
-    assert res == {"key": True, "fetched": 4, "complete": True, "error": None}
+    assert res == {"key": True, "fetched": 6, "complete": True, "error": None}  # three days, three pages of splits and dividends
     assert st.bar("AAA", d1) == (10, 10.5, 1000) and st.bar("ZZZ", d1) is None and st.bar("AAA", date(2026, 12, 4)) is None
     assert st.splits(d2) == {"AAA": 2.0} and st.dividends(d3) == {"AAA": 0.5} and st.actions_through() == d3
     assert all("abc123" not in u for u in calls)  # the key travels in a header, never in an address
@@ -568,5 +568,20 @@ def test_price_store(tmp_path):
     assert not late["complete"] and "not published" in late["error"]
     (tmp_path / "data" / "prices" / "2026-12-01.json.gz").write_bytes(b"cut short")
     assert not prices.Store(tmp_path, get=get, gap=0).has(d2)  # a damaged file counts as missing
+    # cut short between pages, the reading of splits and dividends carries on where it stopped
+    import time as _time
+    (tmp_path / "slow").mkdir()
+    seen = []
+
+    def slow(url):
+        seen.append(url)
+        _time.sleep(0.05)
+        return get(url)
+
+    cut = prices.Store(tmp_path / "slow", key="k", get=slow, gap=0)
+    assert cut._fetch_actions(d1, d3, _time.monotonic() + 0.03) == (False, 1) and cut.actions_through() is None
+    resumed = prices.Store(tmp_path / "slow", key="k", get=slow, gap=0)
+    assert resumed._fetch_actions(d1, d3, _time.monotonic() + 30) == (True, 2) and resumed.dividends(d3) == {"AAA": 0.5}
+    assert sum("/splits" in u for u in seen) == 1 and resumed.splits(d2) == {"AAA": 2.0}
     nokey = prices.Store(tmp_path / "other", key="", get=get, gap=0) if (tmp_path / "other").mkdir() is None else None
     assert nokey.ensure([d1], d1, 30) == {"key": False, "fetched": 0, "complete": False, "error": None}
