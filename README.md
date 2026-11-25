@@ -8,6 +8,8 @@ The rules are in [PREREGISTRATION.md](PREREGISTRATION.md) and `frozen.json`. The
 
 This is a measuring instrument. It does not say what to buy or sell.
 
+From November 30, 2026 to February 26, 2027 it also runs a fake-money test: three pretend accounts that trade on the filings under rules fixed in advance, against simply holding the market. No real money is involved. The rules are in [PAPER.md](PAPER.md).
+
 ## Setup
 
 1. Install [uv](https://docs.astral.sh/uv/), then run `uv sync` in this folder.
@@ -27,7 +29,7 @@ Run it once a week, between Friday night and Sunday night New York time. A forec
 
 Inside the Claude desktop workspace, where commands are limited to three minutes and the folder does not allow deletes, use `bash scripts/vm_weekly.sh` instead and repeat it until it prints DONE. That sandbox has no GitHub login, so the script also writes the whole history to `data/shell-ledger.bundle` for a machine that does.
 
-Single steps: `uv run shell-ledger status | ingest | issue | score | historical | event | report | readout | check`. `readout` prints the weekly message: the short version of the report plus the largest moves by company.
+Single steps: `uv run shell-ledger status | ingest | issue | score | historical | event | report | readout | check`. `readout` prints the weekly message: the short version of the report plus the largest moves by company. `paper` updates and prints the fake-money accounts.
 
 ## Where things are
 
@@ -40,6 +42,10 @@ Single steps: `uv run shell-ledger status | ingest | issue | score | historical 
 | `ledger/event/` | Event-test readings | yes |
 | `ledger/reports/` | Weekly reports: money moves and next week's outlook by sector, then every method's score | yes |
 | `data/readouts/` | The weekly message, which also names companies | no |
+| `paper_rules.json`, `PAPER_RULES.sha256` | The fake-money test's rules and their hash | yes |
+| `ledger/paper/` | Each week's sealed fake-money orders: a fingerprint of the stock list, and the sector funds | yes |
+| `data/paper/` | The fake-money orders in full, with company names | no |
+| `data/prices/`, `data/price-key.txt` | Cached daily prices and the key for the price service | no |
 | `data/shell_ledger.sqlite` | Filings, including per-filer rows | no |
 | `.env` | Your SEC contact line | no |
 

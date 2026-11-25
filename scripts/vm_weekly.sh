@@ -25,7 +25,7 @@ bundle() {
 }
 g add ledger
 if g diff --cached --quiet; then bundle; echo "DONE: ledger unchanged"; exit 0; fi
-new=$(g diff --cached --name-only --diff-filter=A -- ledger/forecasts | grep '\.json$' || true)
+new=$(g diff --cached --name-only --diff-filter=A -- ledger/forecasts ledger/paper | grep '\.json$' || true)
 g commit -q -m "ledger: $(date -u +%Y-%m-%dT%H:%MZ)" ${LEDGER_COMMIT_TRAILER:+-m "$LEDGER_COMMIT_TRAILER"}
 for f in $new; do
   if uvx --quiet --from opentimestamps-client ots stamp "$f"; then g add "$f.ots"; else echo "timestamp failed for $f"; fi

@@ -389,8 +389,9 @@ def tables(s: Series, fz: dict, root: Path, board: dict) -> list:
     return L
 
 
-def build(conn, root: Path, fz: dict, s: Series, board: dict, today: date, filed_through: date, ev=None):
-    """Return (public report text, weekly message text)."""
+def build(conn, root: Path, fz: dict, s: Series, board: dict, today: date, filed_through: date, ev=None, extra=None):
+    """Return (public report text, weekly message text). `extra` is (public lines, private lines) to add to each."""
+    extra_public, extra_private = extra or ([], [])
     k = fz["data"]["timely_trading_days"]
     short = short_version(s, fz, root, board, today, ev)
     complete = s.days[s.valid].isoformat() if s.valid >= 0 else "none yet"
@@ -405,7 +406,7 @@ def build(conn, root: Path, fz: dict, s: Series, board: dict, today: date, filed
         "## The short version",
         "",
     ]
-    pub += short + tables(s, fz, root, board)
+    pub += short + list(extra_public) + tables(s, fz, root, board)
 
     msg = [
         f"# Insider money moves, {today.isoformat()}",
@@ -415,7 +416,7 @@ def build(conn, root: Path, fz: dict, s: Series, board: dict, today: date, filed
         "the public report has sector totals only.",
         "",
     ]
-    msg += short
+    msg += short + list(extra_private)
     m = moves(s, fz)
     if m:
         c = companies(conn, m["from"], filed_through)

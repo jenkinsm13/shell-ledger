@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from shell_ledger import config, db, event, ingest, ledger, model, readout, report, series, tradingdays as td
+from shell_ledger import config, db, event, ingest, ledger, model, paper, prices, readout, report, series, tradingdays as td
 
 ROOT = Path(__file__).resolve().parents[1]
 FZ = json.loads((ROOT / "frozen.json").read_text())
@@ -363,3 +363,203 @@ def test_readout_before_anything_is_written(project, tmp_path):
     board = ledger.scoreboard(project, fz)
     pub, msg = readout.build(conn, project, fz, make_series(3), board, date(2026, 12, 15), date(2026, 12, 15))
     assert "No predicted week has begun yet." in pub and "Sold: none." in msg
+
+
+# ---- the fake-money test
+
+
+class FakePrices:
+    """Flat prices unless told otherwise: {ticker: (open, close, volume)} for every day given."""
+
+    def __init__(self, days, flat, special=None, splits=None, dividends=None, missing=()):
+        self.days, self.flat, self.special = set(days), flat, special or {}
+        self._splits, self._dividends, self.missing = splits or {}, dividends or {}, set(missing)
+
+    def has(self, d):
+        return d in self.days
+
+    def bar(self, tk, d):
+        if d not in self.days or (tk, d) in self.missing:
+            return None
+        return self.special.get((tk, d), self.flat.get(tk))
+
+    def splits(self, d):
+        return self._splits.get(d, {})
+
+    def dividends(self, d):
+        return self._dividends.get(d, {})
+
+
+@pytest.fixture
+def fake_money(project):
+    for name in ("paper_rules.json", "PAPER_RULES.sha256"):
+        shutil.copy(ROOT / name, project / name)
+    return project
+
+
+FUNDS = {"XLV": (100.0, 100.0, 1e7), "XLU": (50.0, 50.0, 1e7), "XLF": (40.0, 40.0, 1e7), "XLE": (80.0, 80.0, 1e7), "SPY": (500.0, 500.0, 1e8)}
+
+
+def one_order(week="2026-11-30", tickers=("AAA",), funds=("XLV", "XLU", "XLF")):
+    cands = [{"rank": i + 1, "cik": i + 1, "ticker": tk, "name": f"{tk.title()} Corp", "insiders": 3, "dollars": 500000} for i, tk in enumerate(tickers)]
+    return {week: {"entry_week": week, "entry_day": week, "group_buys": cands, "sector_tilt": {"funds": list(funds)}}}
+
+
+def test_fake_money_rules_are_guarded(fake_money):
+    rules = paper.load_rules(fake_money)
+    weeks = paper.entry_weeks(rules)
+    assert len(weeks) == 13 and weeks[0] == date(2026, 11, 30) and weeks[-1] == date(2027, 2, 22)
+    assert paper.entry_day(date(2027, 1, 18)) == date(2027, 1, 19)  # Monday holiday: buys happen Tuesday
+    assert td.is_trading_day(date.fromisoformat(rules["end_day"])) and date.fromisoformat(rules["end_day"]) == date(2027, 2, 26)
+    assert len(paper.lookback_days(rules)) == 20 and paper.lookback_days(rules)[-1] == date(2026, 11, 27)
+    (fake_money / "paper_rules.json").write_text((fake_money / "paper_rules.json").read_text().replace("5000", "9000"))
+    with pytest.raises(paper.RulesError):
+        paper.load_rules(fake_money)
+
+
+def test_fake_money_replay_arithmetic(fake_money):
+    rules = paper.load_rules(fake_money)
+    days = td.trading_days(date(2026, 10, 1), date(2027, 2, 26))
+    flat = dict(FUNDS, AAA=(10.0, 10.0, 1e6), PENNY=(1.0, 1.0, 1e7), THIN=(10.0, 10.0, 100.0))
+    orders = one_order(tickers=("PENNY", "THIN", "GONE", "AAA"))
+    out = paper.replay(rules, orders, FakePrices(days, flat), date(2026, 12, 4))
+    assert out["status"] == "running" and out["as_of"] == date(2026, 12, 4)
+    # one $5,000 buy at a quarter percent: the account is down exactly the fee
+    assert out["values"]["group_buys"] == pytest.approx(100000 - 12.5)
+    assert out["values"]["market"] == pytest.approx(100000 / 1.0005)
+    assert out["values"]["sector_tilt"] == pytest.approx(100000 - 50.0)
+    assert {x["ticker"]: x["why"] for x in out["skipped"]} == {
+        "PENNY": "priced under $2", "THIN": "too thinly traded", "GONE": "did not trade that day"}
+    assert [p["ticker"] for p in out["positions"]["group_buys"]] == ["AAA"]
+    assert len(out["weekly"]) == 1 and out["weekly"][0]["day"] == date(2026, 12, 4)
+    # run to the end: the stock is sold after 20 trading days, everything is cash, the reading is given once
+    end = paper.replay(rules, orders, FakePrices(days, flat), date(2027, 3, 31))
+    assert end["status"] == "final" and end["as_of"] == date(2027, 2, 26) and len(end["weekly"]) == 13
+    assert end["values"]["group_buys"] == pytest.approx(100000 - 12.5 - 5000 * 0.0025)
+    sale = [t for t in end["trades"] if t["ticker"] == "AAA" and t["side"] == "sell"][0]
+    assert sale["day"] == td.add_trading_days(date(2026, 11, 30), 20) and sale["why"] == "held four weeks"
+    assert all(not end["positions"][b] for b in paper.BOOKS)
+    assert end["reading"]["group_buys"]["verdict"] == "no clear difference from the market"
+
+
+def test_fake_money_gains_splits_and_dividends(fake_money):
+    rules = paper.load_rules(fake_money)
+    days = td.trading_days(date(2026, 10, 1), date(2026, 12, 11))
+    flat = dict(FUNDS, AAA=(10.0, 10.0, 1e6))
+    d1, d2, d3 = date(2026, 12, 1), date(2026, 12, 2), date(2026, 12, 3)
+    px = FakePrices(days, flat, special={("AAA", d1): (10.0, 12.0, 1e6), ("AAA", d2): (6.0, 6.0, 2e6), ("AAA", d3): (6.0, 6.0, 2e6)},
+                    splits={d2: {"AAA": 2.0}}, dividends={d3: {"AAA": 0.5}})
+    after = lambda day: paper.replay(rules, one_order(), px, day)["values"]["group_buys"]
+    assert after(d1) == pytest.approx(100000 - 12.5 + 500 * 2.0)  # 500 shares, up $2
+    assert after(d2) == pytest.approx(100000 - 12.5 + 1000 * 6.0 - 5000)  # two-for-one: 1,000 shares at $6
+    assert after(d3) == pytest.approx(100000 - 12.5 + 1000 * 6.0 - 5000 + 1000 * 0.5)  # 50 cents a share paid in
+    # no values at all until the look-back prices are in
+    short = FakePrices(days[30:], flat)
+    assert paper.replay(rules, one_order(), short, date(2026, 12, 4))["status"] == "waiting"
+
+
+def test_fake_money_sector_rebalance(fake_money):
+    rules = paper.load_rules(fake_money)
+    days = td.trading_days(date(2026, 10, 1), date(2026, 12, 11))
+    orders = {**one_order("2026-11-30", ()), **one_order("2026-12-07", (), ("XLV", "XLU", "XLE"))}
+    out = paper.replay(rules, orders, FakePrices(days, FUNDS), date(2026, 12, 11))
+    # week one: all of it traded; week two: one third sold and one third bought
+    assert out["values"]["sector_tilt"] == pytest.approx(100000 - 50.0 - (99950 * 2 / 3) * 0.0005, abs=0.01)
+    assert sorted(p["ticker"] for p in out["positions"]["sector_tilt"]) == ["XLE", "XLU", "XLV"]
+    dropped = [t for t in out["trades"] if t["book"] == "sector_tilt" and t["side"] == "sell"]
+    assert [t["ticker"] for t in dropped] == ["XLF"]
+
+
+def _buyers(conn, cik, name, sic, owners, day="2026-11-24", filed="2026-11-25", dollars=60000.0):
+    conn.execute("INSERT INTO issuers(cik, sic, name) VALUES (?, ?, ?)", (cik, sic, name))
+    for o in owners:
+        conn.execute(db.INSERT_TRADE, (f"F-{cik}-{o}", day, "P", cik, o, filed, dollars, 1000.0, dollars, 1, "test"))
+
+
+def test_fake_money_orders_are_sealed(fake_money, tmp_path):
+    rules = paper.load_rules(fake_money)
+    fz = config.load_frozen(fake_money)
+    conn = db.connect(tmp_path / "t.sqlite")
+    _buyers(conn, 1, "ACME ROCKETS INC", 3760, (11, 12, 13))
+    _buyers(conn, 2, "FOUR BUYERS CORP", 2834, (21, 22, 23, 24))
+    _buyers(conn, 3, "TWO BUYERS CORP", 2834, (31, 32))  # too few insiders
+    _buyers(conn, 4, "SOME CLOSED END FUND", 6726, (41, 42, 43))  # a fund, not a company
+    _buyers(conn, 5, "NO TICKER CORP", 2834, (51, 52, 53))
+    _buyers(conn, 6, "OLD NEWS CORP", 2834, (61, 62, 63), day="2026-10-20", filed="2026-10-21")
+    tickers = {1: "ACME", 2: "FOUR", 3: "TWO", 4: "FUND", 6: "OLD"}
+    cands = paper.group_buy_candidates(conn, rules, date(2026, 11, 27), tickers)
+    assert [c["ticker"] for c in cands] == ["FOUR", "ACME"] and cands[0]["insiders"] == 4 and cands[0]["rank"] == 1
+    s = make_series(5)
+    early = datetime(2026, 11, 21, 15, 0, tzinfo=timezone.utc)
+    assert paper.write_orders(fake_money, rules, conn, s, fz, date(2026, 11, 20), tickers, early) == (None, "outside the test window")
+    saturday = datetime(2026, 11, 28, 15, 0, tzinfo=timezone.utc)
+    stale = paper.write_orders(fake_money, rules, conn, s, fz, date(2026, 11, 20), tickers, saturday)
+    assert stale[0] is None and "too old" in stale[1]
+    path, why = paper.write_orders(fake_money, rules, conn, s, fz, date(2026, 11, 27), tickers, saturday)
+    assert why is None and path.name == "2026-11-30.json" and "data" in path.parts
+    order = json.loads(path.read_text())
+    public_text = (fake_money / "ledger" / "paper" / "2026-11-30.json").read_text()
+    public = json.loads(public_text)
+    assert "ACME" not in public_text.upper() and "FOUR" not in public_text.upper()  # names stay sealed
+    assert public["group_buys"]["sha256"] == paper.commit_hash(order["salt"], order["group_buys"])
+    assert public["group_buys"]["candidates"] == 2 and len(public["sector_tilt"]["funds"]) == 3
+    assert set(public["sector_tilt"]["funds"]) <= set(rules["sector_tilt"]["funds"].values())
+    assert paper.write_orders(fake_money, rules, conn, s, fz, date(2026, 11, 27), tickers, saturday) == (None, "already written")
+    paper.load_rules(fake_money)  # the sealed file carries the rules' hash, so this still loads
+
+
+def test_fake_money_words(fake_money):
+    rules = paper.load_rules(fake_money)
+    days = td.trading_days(date(2026, 10, 1), date(2026, 12, 11))
+    orders = {**one_order("2026-11-30", ("AAA",)), **one_order("2026-12-14", ("BBB",))}
+    px = FakePrices(days, dict(FUNDS, AAA=(10.0, 11.0, 1e6)))
+    out = paper.replay(rules, orders, px, date(2026, 12, 11))
+    private = "\n".join(paper.lines(rules, out, orders, True, date(2026, 12, 12)))
+    public = "\n".join(paper.lines(rules, out, orders, False, date(2026, 12, 12)))
+    assert "week 2 of 13, through Dec 11; ends Feb 26" in private
+    assert "Holding Aaa Corp (+10.0%)" in private and "Group buys will try, in this order: Bbb Corp." in private
+    assert "In the Health and pharma, Utilities and Finance funds." in private
+    assert "Aaa" not in public and "Bbb" not in public and "names sealed" in public and "Holding 1 stock." in public
+    assert "Just holding the market: $99,950 (down 0.0%)" in public and "too early to say" in public
+    waiting = paper.replay(rules, orders, FakePrices([], {}), date(2026, 12, 11))
+    text = "\n".join(paper.lines(rules, waiting, orders, True, date(2026, 11, 28), "No account values yet: the price key is not in place."))
+    assert "first buys Nov 30; ends Feb 26" in text and "price key is not in place" in text and "Aaa Corp" in text
+
+
+def test_price_store(tmp_path):
+    (tmp_path / "data").mkdir()
+    assert prices.find_key(tmp_path) is None
+    (tmp_path / "data" / "price-key.txt").write_text("# paste the key on the next line\n\n  abc123  \n")
+    assert prices.find_key(tmp_path) == "abc123"
+    calls = []
+
+    def get(url):
+        calls.append(url)
+        if "/aggs/grouped/" in url:
+            if "2026-12-03" in url:
+                return {"status": "OK", "resultsCount": 0}
+            return {"results": [{"T": "AAA", "o": 10, "h": 11, "l": 9, "c": 10.5, "v": 1000}, {"T": "BAD"}]}
+        if "/splits" in url:
+            return {"results": [{"ticker": "AAA", "execution_date": "2026-12-01", "split_from": 1, "split_to": 2}]}
+        if "next" in url:
+            return {"results": [{"ticker": "AAA", "ex_dividend_date": "2026-12-02", "cash_amount": 0.25}]}
+        return {"results": [{"ticker": "AAA", "ex_dividend_date": "2026-12-02", "cash_amount": 0.25},
+                            {"ticker": "EUR", "ex_dividend_date": "2026-12-02", "cash_amount": 9, "currency": "EUR"}],
+                "next_url": "https://api.polygon.io/v3/reference/dividends?cursor=next"}
+
+    st = prices.Store(tmp_path, get=get, gap=0)
+    d1, d2, d3 = date(2026, 11, 30), date(2026, 12, 1), date(2026, 12, 2)
+    res = st.ensure([d1, d2, d3], d1, 30)
+    assert res == {"key": True, "fetched": 4, "complete": True, "error": None}
+    assert st.bar("AAA", d1) == (10, 10.5, 1000) and st.bar("ZZZ", d1) is None and st.bar("AAA", date(2026, 12, 4)) is None
+    assert st.splits(d2) == {"AAA": 2.0} and st.dividends(d3) == {"AAA": 0.5} and st.actions_through() == d3
+    assert all("abc123" not in u for u in calls)  # the key travels in a header, never in an address
+    again = prices.Store(tmp_path, get=get, gap=0)  # a new run reads the cache and asks for nothing
+    n = len(calls)
+    assert again.ensure([d1, d2, d3], d1, 30)["complete"] and len(calls) == n and again.bar("AAA", d2) == (10, 10.5, 1000)
+    late = again.ensure([d1, d2, d3, date(2026, 12, 3)], d1, 30)  # a day the service has not published yet
+    assert not late["complete"] and "not published" in late["error"]
+    (tmp_path / "data" / "prices" / "2026-12-01.json.gz").write_bytes(b"cut short")
+    assert not prices.Store(tmp_path, get=get, gap=0).has(d2)  # a damaged file counts as missing
+    nokey = prices.Store(tmp_path / "other", key="", get=get, gap=0) if (tmp_path / "other").mkdir() is None else None
+    assert nokey.ensure([d1], d1, 30) == {"key": False, "fetched": 0, "complete": False, "error": None}

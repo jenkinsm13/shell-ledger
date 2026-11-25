@@ -7,7 +7,7 @@ import sys
 import time
 from datetime import date, datetime, timezone
 
-from . import config, db, event, ingest, ledger, readout, report, secweb
+from . import config, db, event, ingest, ledger, paper, readout, report, secweb
 from .model import Model
 from .series import build
 
@@ -103,11 +103,17 @@ def cmd_event(a):
     print(json.dumps({k: ev[k] for k in ("status", "settled_through", "rank_of_this_year", "years_compared", "passes")}))
 
 
-def _reports(root, fz, conn, model, ev=None):
+def _reports(root, fz, conn, model, ev=None, fake=None):
     """Write the public report (sector totals) and the local weekly message (with company names)."""
     today = date.today()
     board = ledger.scoreboard(root, fz)
-    pub, msg = readout.build(conn, root, fz, model.s, board, today, ingest.filed_through(conn), ev)
+    if fake is None:
+        try:
+            fake = paper.view(root)
+        except Exception as e:  # the fake-money test must never stop the real ledger
+            print("fake-money section left out:", e)
+    extra = (fake["public"], fake["private"]) if fake else None
+    pub, msg = readout.build(conn, root, fz, model.s, board, today, ingest.filed_through(conn), ev, extra)
     text = report.build(root, fz, board, pub)
     (config.ledger_dir(root, "reports") / f"{today.isoformat()}.md").write_text(text)
     local = config.data_dir(root) / "readouts"
@@ -127,6 +133,23 @@ def cmd_readout(a):
     """Write and print the weekly message: where the money moved, with company names. Local only."""
     root, fz, conn = _open()
     print(_reports(root, fz, conn, _model(conn, fz))[1])
+
+
+def cmd_paper(a):
+    """The fake-money test: write due orders, update prices, print the three accounts. No real orders, ever."""
+    root, fz, conn = _open()
+    model = _model(conn, fz)
+    through = ingest.filed_through(conn)
+    if a.rehearse:
+        out = paper.rehearse(root, conn, fz, model.s, date.fromisoformat(a.rehearse), a.max_seconds)
+    else:
+        out = paper.step(root, conn, fz, model.s, through, a.max_seconds)
+        print("orders:", out["info"].get("orders"))
+    print("prices:", {k: v for k, v in out["prices"].items()})
+    print("\n".join(out["private"]))
+    if out["more"]:
+        print("PAPER: more prices to load, run again")
+        return 3
 
 
 def cmd_weekly(a):
@@ -157,7 +180,16 @@ def cmd_weekly(a):
         print("historical:", h["weeks"], "weeks,", h["reading"])
     ev = _event(root, fz, conn, model)
     print("event:", ev["status"], "rank", ev["rank_of_this_year"], "of", ev["years_compared"])
-    _reports(root, fz, conn, model, ev)
+    fake = None
+    try:
+        fake = paper.step(root, conn, fz, model.s, ingest.filed_through(conn), min(60.0, a.max_seconds))
+        print("fake money: orders", fake["info"].get("orders"), "| prices", fake["prices"])
+    except Exception as e:  # the fake-money test must never stop the real ledger
+        print("fake money: skipped,", e)
+    if fake and fake["more"]:
+        print("WEEKLY: loading prices for the fake-money test; run again.")
+        return 3
+    _reports(root, fz, conn, model, ev, fake)
     print("WEEKLY: done")
     return 0
 
@@ -175,18 +207,22 @@ def main(argv=None):
         ("event", cmd_event),
         ("report", cmd_report),
         ("readout", cmd_readout),
+        ("paper", cmd_paper),
         ("weekly", cmd_weekly),
     ]:
         sp = sub.add_parser(name, help=(fn.__doc__ or "").strip() or None)
         sp.set_defaults(fn=fn)
         if name in ("ingest", "weekly"):
             sp.add_argument("--max-seconds", type=float, default=36000, help="time budget per ingest step")
+        if name == "paper":
+            sp.add_argument("--max-seconds", type=float, default=100, help="time budget for loading prices")
+            sp.add_argument("--rehearse", metavar="MONDAY", help="run the same rules over thirteen past weeks starting this Monday")
         if name == "weekly":
             sp.add_argument("--historical", action="store_true", help="rerun the historical reading")
     a = p.parse_args(argv)
     try:
         return a.fn(a) or 0
-    except (secweb.SecError, ledger.LedgerError, config.FrozenError) as e:
+    except (secweb.SecError, ledger.LedgerError, config.FrozenError, paper.RulesError) as e:
         print(f"STOPPED: {e}", file=sys.stderr)
         return 2
 

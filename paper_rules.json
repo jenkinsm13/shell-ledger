@@ -1,0 +1,62 @@
+{
+ "name": "shell-ledger fake-money test",
+ "version": 1,
+ "what": "Three pretend accounts follow rules fixed in advance. No real money moves and no real orders are placed.",
+ "start_cash": 100000,
+ "first_entry_week": "2026-11-30",
+ "rounds": 13,
+ "end_day": "2027-02-26",
+ "orders": {
+  "written": "before the entry week begins, New York time; a round whose orders are not written in time is skipped, never backfilled",
+  "entry_day": "the first trading day of the entry week",
+  "max_stale_trading_days": 3
+ },
+ "prices": {
+  "source": "Massive (formerly Polygon.io) grouped daily bars, not adjusted",
+  "buy_and_sell_at": "the day's opening price",
+  "value_at": "the day's closing price; a holding with no trade that day keeps its last closing price",
+  "splits": "share counts follow stock splits on the day they take effect",
+  "dividends": "cash dividends are added to the account on the ex-dividend day"
+ },
+ "cost": {"stock": 0.0025, "fund": 0.0005},
+ "group_buys": {
+  "idea": "buy companies where several insiders bought their own stock on the open market at about the same time",
+  "min_insiders": 3,
+  "min_dollars": 100000,
+  "filed_within_trading_days": 5,
+  "traded_within_trading_days": 10,
+  "exchanges": ["NYSE", "Nasdaq"],
+  "excluded_sic": [6722, 6726, 6770],
+  "rank": "most insiders first, then most dollars",
+  "candidates_per_round": 8,
+  "new_positions_per_round": 5,
+  "position_dollars": 5000,
+  "max_positions": 20,
+  "hold_trading_days": 20,
+  "min_prior_close": 2.0,
+  "min_median_dollar_volume": 500000,
+  "volume_lookback_days": 20,
+  "min_price_days": 10
+ },
+ "sector_tilt": {
+  "idea": "hold the funds of the three sectors where insider buying is most unusual compared with insider selling",
+  "window_trading_days": 10,
+  "score": "share of two-week stretches in the prior two years that this stretch's buying beats, minus the same share for selling",
+  "hold": 3,
+  "weights": "equal, reset at the open of every entry day",
+  "funds": {
+   "NoDur": "XLP", "Durbl": "XLY", "Manuf": "XLI", "Enrgy": "XLE", "Chems": "XLB", "BusEq": "XLK",
+   "Telcm": "IYZ", "Utils": "XLU", "Shops": "XRT", "Hlth": "XLV", "Money": "XLF"
+  }
+ },
+ "market": {"idea": "buy one broad market fund on the first day and hold it", "fund": "SPY"},
+ "reading": {
+  "when": "once, after the end day",
+  "weekly_difference": "the account's weekly return minus the market account's, last close of each week",
+  "statistic": "mean weekly difference divided by its standard error",
+  "ahead_if": "the account ends above the market account and the statistic is at least 1.645",
+  "behind_if": "the account ends below the market account and the statistic is at most -1.645",
+  "otherwise": "no clear difference from the market",
+  "t": 1.645
+ }
+}

@@ -15,7 +15,7 @@ if git diff --cached --quiet; then
   echo "ledger unchanged"
   exit 0
 fi
-new_forecasts=$(git diff --cached --name-only --diff-filter=A -- ledger/forecasts | grep '\.json$' || true)
+new_forecasts=$(git diff --cached --name-only --diff-filter=A -- ledger/forecasts ledger/paper | grep '\.json$' || true)
 git commit -q -m "ledger: $(date -u +%Y-%m-%dT%H:%MZ)"
 
 # An independent timestamp for each new forecast, anchored outside GitHub.
