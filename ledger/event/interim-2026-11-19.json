@@ -1,0 +1,221 @@
+{
+ "kind": "event_test",
+ "claim": "the moves start now",
+ "frozen_sha256": "884a06a9078ab1639c912278fece0ee6e50b2373f7095381f4a2712cad7ae3cc",
+ "status": "interim",
+ "settled_through": "2026-11-19",
+ "years_compared": 20,
+ "rank_of_this_year": null,
+ "passes": null,
+ "uplift_by_year": {
+  "2006": {
+   "uplift": -0.03291,
+   "window_days": 28,
+   "reference_days": 223
+  },
+  "2007": {
+   "uplift": -0.013361,
+   "window_days": 28,
+   "reference_days": 223
+  },
+  "2008": {
+   "uplift": -0.185909,
+   "window_days": 28,
+   "reference_days": 225
+  },
+  "2009": {
+   "uplift": 0.045073,
+   "window_days": 28,
+   "reference_days": 224
+  },
+  "2010": {
+   "uplift": 0.31723,
+   "window_days": 28,
+   "reference_days": 224
+  },
+  "2011": {
+   "uplift": 0.05272,
+   "window_days": 28,
+   "reference_days": 224
+  },
+  "2012": {
+   "uplift": 0.28941,
+   "window_days": 28,
+   "reference_days": 222
+  },
+  "2013": {
+   "uplift": -0.037122,
+   "window_days": 28,
+   "reference_days": 224
+  },
+  "2014": {
+   "uplift": -0.055847,
+   "window_days": 28,
+   "reference_days": 224
+  },
+  "2015": {
+   "uplift": -0.137525,
+   "window_days": 28,
+   "reference_days": 224
+  },
+  "2016": {
+   "uplift": 0.022968,
+   "window_days": 28,
+   "reference_days": 224
+  },
+  "2017": {
+   "uplift": 0.136079,
+   "window_days": 28,
+   "reference_days": 223
+  },
+  "2018": {
+   "uplift": -0.109206,
+   "window_days": 27,
+   "reference_days": 224
+  },
+  "2019": {
+   "uplift": 0.016638,
+   "window_days": 28,
+   "reference_days": 224
+  },
+  "2020": {
+   "uplift": 0.229906,
+   "window_days": 28,
+   "reference_days": 225
+  },
+  "2021": {
+   "uplift": -0.016763,
+   "window_days": 28,
+   "reference_days": 224
+  },
+  "2022": {
+   "uplift": 0.1553,
+   "window_days": 28,
+   "reference_days": 223
+  },
+  "2023": {
+   "uplift": 0.209182,
+   "window_days": 28,
+   "reference_days": 222
+  },
+  "2024": {
+   "uplift": 0.069812,
+   "window_days": 28,
+   "reference_days": 224
+  },
+  "2025": {
+   "uplift": 0.022572,
+   "window_days": 28,
+   "reference_days": 222
+  }
+ },
+ "same_filers": {
+  "rank_of_this_year": null,
+  "years_compared": 17,
+  "by_year": {
+   "2009": {
+    "panel": 6995,
+    "in_window": 1096,
+    "in_reference": 3690,
+    "v": -1.213959
+   },
+   "2010": {
+    "panel": 6303,
+    "in_window": 1183,
+    "in_reference": 3945,
+    "v": -1.204395
+   },
+   "2011": {
+    "panel": 6089,
+    "in_window": 1004,
+    "in_reference": 3876,
+    "v": -1.350812
+   },
+   "2012": {
+    "panel": 6346,
+    "in_window": 1322,
+    "in_reference": 4114,
+    "v": -1.13525
+   },
+   "2013": {
+    "panel": 7238,
+    "in_window": 1248,
+    "in_reference": 4824,
+    "v": -1.352061
+   },
+   "2014": {
+    "panel": 7398,
+    "in_window": 1302,
+    "in_reference": 4930,
+    "v": -1.331437
+   },
+   "2015": {
+    "panel": 7830,
+    "in_window": 1160,
+    "in_reference": 5036,
+    "v": -1.468192
+   },
+   "2016": {
+    "panel": 7758,
+    "in_window": 1273,
+    "in_reference": 4763,
+    "v": -1.319501
+   },
+   "2017": {
+    "panel": 7096,
+    "in_window": 1265,
+    "in_reference": 4637,
+    "v": -1.298995
+   },
+   "2018": {
+    "panel": 6860,
+    "in_window": 1007,
+    "in_reference": 4304,
+    "v": -1.452569
+   },
+   "2019": {
+    "panel": 6467,
+    "in_window": 1010,
+    "in_reference": 4074,
+    "v": -1.394675
+   },
+   "2020": {
+    "panel": 6322,
+    "in_window": 1188,
+    "in_reference": 4036,
+    "v": -1.222983
+   },
+   "2021": {
+    "panel": 6239,
+    "in_window": 1081,
+    "in_reference": 4114,
+    "v": -1.336509
+   },
+   "2022": {
+    "panel": 6348,
+    "in_window": 980,
+    "in_reference": 3635,
+    "v": -1.310812
+   },
+   "2023": {
+    "panel": 5784,
+    "in_window": 1092,
+    "in_reference": 3638,
+    "v": -1.203423
+   },
+   "2024": {
+    "panel": 5780,
+    "in_window": 1119,
+    "in_reference": 3771,
+    "v": -1.214905
+   },
+   "2025": {
+    "panel": 5722,
+    "in_window": 1133,
+    "in_reference": 3660,
+    "v": -1.172594
+   }
+  },
+  "decides": "nothing; reported only"
+ }
+}
