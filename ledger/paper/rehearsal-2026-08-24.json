@@ -1,0 +1,200 @@
+{
+ "kind": "paper_rehearsal",
+ "note": "The fake-money rules run over thirteen past weeks, as a check of the machinery. It is a look-back and decides nothing. The rules were fixed and committed before it was run and were not changed after it. It uses today's list of listed companies, so companies delisted since then are missing.",
+ "rules_sha256": "b27869c48bebae37503b8fe33ef67182a9d8493e3c3867e4e609838d194aea17",
+ "run_utc": "2026-11-25T10:10:59Z",
+ "first_entry_week": "2026-08-24",
+ "end_day": "2026-11-20",
+ "start_cash": 100000.0,
+ "final_values": {
+  "group_buys": 88804.75,
+  "sector_tilt": 99516.22,
+  "market": 90353.88
+ },
+ "weekly": [
+  {
+   "week": 1,
+   "day": "2026-08-28",
+   "group_buys": 99574.37,
+   "sector_tilt": 99651.52,
+   "market": 100547.28
+  },
+  {
+   "week": 2,
+   "day": "2026-09-04",
+   "group_buys": 99911.99,
+   "sector_tilt": 98993.0,
+   "market": 100657.06
+  },
+  {
+   "week": 3,
+   "day": "2026-09-11",
+   "group_buys": 100052.26,
+   "sector_tilt": 97496.51,
+   "market": 99885.99
+  },
+  {
+   "week": 4,
+   "day": "2026-09-18",
+   "group_buys": 98742.89,
+   "sector_tilt": 96568.53,
+   "market": 99793.04
+  },
+  {
+   "week": 5,
+   "day": "2026-09-25",
+   "group_buys": 97757.37,
+   "sector_tilt": 96771.23,
+   "market": 101055.52
+  },
+  {
+   "week": 6,
+   "day": "2026-10-02",
+   "group_buys": 97840.85,
+   "sector_tilt": 97509.71,
+   "market": 100832.04
+  },
+  {
+   "week": 7,
+   "day": "2026-10-09",
+   "group_buys": 98151.65,
+   "sector_tilt": 98025.64,
+   "market": 101999.11
+  },
+  {
+   "week": 8,
+   "day": "2026-10-16",
+   "group_buys": 96525.45,
+   "sector_tilt": 100999.88,
+   "market": 99996.92
+  },
+  {
+   "week": 9,
+   "day": "2026-10-23",
+   "group_buys": 96323.52,
+   "sector_tilt": 101408.15,
+   "market": 99568.25
+  },
+  {
+   "week": 10,
+   "day": "2026-10-30",
+   "group_buys": 94530.19,
+   "sector_tilt": 103354.21,
+   "market": 99012.82
+  },
+  {
+   "week": 11,
+   "day": "2026-11-06",
+   "group_buys": 94049.44,
+   "sector_tilt": 104218.47,
+   "market": 96342.8
+  },
+  {
+   "week": 12,
+   "day": "2026-11-13",
+   "group_buys": 93230.61,
+   "sector_tilt": 107015.82,
+   "market": 98836.38
+  },
+  {
+   "week": 13,
+   "day": "2026-11-20",
+   "group_buys": 88804.75,
+   "sector_tilt": 99516.22,
+   "market": 90353.88
+  }
+ ],
+ "reading": {
+  "group_buys": {
+   "t": -0.305,
+   "verdict": "no clear difference from the market"
+  },
+  "sector_tilt": {
+   "t": 1.367,
+   "verdict": "no clear difference from the market"
+  }
+ },
+ "group_buys": {
+  "bought": 42,
+  "held_four_weeks": 27,
+  "average_gain_four_weeks": -0.0428,
+  "winners_four_weeks": 10,
+  "sold_early_at_the_end": 15,
+  "average_gain_sold_early": -0.0664,
+  "passed_on": {
+   "already held": 1,
+   "priced under $2": 4,
+   "too little price history": 4,
+   "too thinly traded": 10
+  }
+ },
+ "sector_tilt": {
+  "funds_by_week": [
+   [
+    "XLU",
+    "IYZ",
+    "XLV"
+   ],
+   [
+    "XLY",
+    "XLU",
+    "XLI"
+   ],
+   [
+    "XLU",
+    "XLY",
+    "XLP"
+   ],
+   [
+    "XLI",
+    "XRT",
+    "IYZ"
+   ],
+   [
+    "XLI",
+    "XRT",
+    "IYZ"
+   ],
+   [
+    "XLI",
+    "XRT",
+    "IYZ"
+   ],
+   [
+    "XRT",
+    "XLI",
+    "IYZ"
+   ],
+   [
+    "XRT",
+    "XLF",
+    "XLP"
+   ],
+   [
+    "XRT",
+    "XLY",
+    "XLP"
+   ],
+   [
+    "XLB",
+    "XLY",
+    "XLP"
+   ],
+   [
+    "XLP",
+    "XRT",
+    "XLU"
+   ],
+   [
+    "IYZ",
+    "XRT",
+    "XLV"
+   ],
+   [
+    "XLU",
+    "XLK",
+    "IYZ"
+   ]
+  ]
+ }
+}
