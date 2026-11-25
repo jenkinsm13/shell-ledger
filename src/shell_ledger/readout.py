@@ -266,8 +266,13 @@ def short_version(s: Series, fz: dict, root: Path, board: dict, today: date, ev:
     o = outlook(root, fz, board)
     if o:
         L += [f"**Expected for the week of {day(o['week'])}** (written {day(o['issued'])}, before the week began)", ""]
-        more = sorted((r for r in o["rows"] if r["times"] >= MORE), key=lambda r: -r["times"])
-        less = sorted((r for r in o["rows"] if r["times"] <= LESS), key=lambda r: r["times"])
+
+        def gap(r):  # dollars a day above or below the usual level
+            return abs(r["per_day"] - r["per_day"] / r["times"]) if r["times"] > 0 else 0.0
+
+        # The largest dollar moves first: a small sector at three times usual is still a small move.
+        more = sorted((r for r in o["rows"] if r["times"] >= MORE), key=gap, reverse=True)[:4]
+        less = sorted((r for r in o["rows"] if r["times"] <= LESS), key=gap, reverse=True)[:4]
 
         def items(rows):
             return "; ".join(
@@ -284,7 +289,7 @@ def short_version(s: Series, fz: dict, root: Path, board: dict, today: date, ev:
         if not more and not less:
             L.append("- Every sector is expected near its usual level.")
         elif rest:
-            L.append(f"- Near usual: the other {rest} sectors.")
+            L.append(f"- The other {rest} sector{'s' if rest != 1 else ''}: near usual, or smaller moves.")
         if o["miss"]:
             L.append(
                 f"- How rough this is: over {o['basis']}, this method's typical miss was a factor of about {o['miss']:.1f}."
